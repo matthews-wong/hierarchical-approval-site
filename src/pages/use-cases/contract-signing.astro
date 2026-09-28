@@ -1,7 +1,7 @@
 ---
 import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
 
-function hl(raw) {
+function hl(raw: string): string {
   return raw
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
