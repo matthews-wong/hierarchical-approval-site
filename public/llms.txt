@@ -41,7 +41,7 @@ Six adapter interfaces for extending behaviour without modifying library code:
 - `IAuthorizationPolicy` — per-operation access control (e.g. signing authority caps)
 - `IOperationMiddleware` — before / after / onError hooks for tracing, logging, quota enforcement
 
-## Built-in enterprise plug-ins (new in 0.3)
+## Built-in enterprise plug-ins
 
 Production-grade implementations of the adapter ports above, each on its own tree-shakeable
 import subpath with zero runtime dependencies:
@@ -50,6 +50,9 @@ import subpath with zero runtime dependencies:
 - `hierarchical-approval/plugins/metrics` — `PrometheusMetricsAdapter` (`scrape()` exposition format), `InMemoryMetricsAdapter` (`snapshot()` with p50/p95), `CompositeMetricsAdapter`
 - `hierarchical-approval/plugins/resilience` — `RbacAuthorizationPolicy` (per-operation roles, default-deny), `CompositeAuthorizationPolicy` (AND/OR), `RateLimitMiddleware` (token bucket), `LoggingMiddleware`
 - `hierarchical-approval/plugins/notify` — `OutboxNotificationAdapter` (retry + exponential backoff + dead-letter, at-least-once), `TemplatedNotificationAdapter`, `CompositeNotificationAdapter`
+- `hierarchical-approval/plugins/tracing` — `TracingMiddleware` (OpenTelemetry-shaped spans per approval operation, no `@opentelemetry/api` dependency), `noopTracer` (default — costs nothing until wired)
+- `hierarchical-approval/plugins/webhook` — `WebhookNotificationAdapter` (HMAC-SHA256 signed HTTP delivery, jittered retry, Retry-After aware)
+- `hierarchical-approval/plugins/scheduler` — `InMemorySchedulerAdapter` (`setTimeout`-based reference `ISchedulerAdapter`; swap in BullMQ, Temporal, or cron for production)
 
 ## Approver types
 
