@@ -1,0 +1,392 @@
+---
+import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
+
+function hl(raw) {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(\/\/[^\n]*)/g, '<span class="c">$1</span>')
+    .replace(/('[^'\\]*(?:\\.[^'\\]*)*')/g, '<span class="s">$1</span>')
+    .replace(/("[^"\\]*(?:\\.[^"\\]*)*")/g, '<span class="s">$1</span>')
+    .replace(/\b(async|await|const|let|if|else|return|new|import|from|export|true|false)\b/g, '<span class="k">$1</span>')
+    .replace(/\b([0-9][0-9_]*(?:\.[0-9]+)?)\b/g, '<span class="n">$1</span>');
+}
+
+const configCode = hl(`const ExpenseSchema = z.object({
+  employeeId: z.string(),
+  totalAmount: z.number().positive(),
+  currency: z.string().default('USD'),
+  isInternational: z.boolean(),
+  receipts: z.array(z.string()),
+  category: z.enum(['travel', 'meals', 'equipment', 'other']),
+  businessJustification: z.string(),
+});
+
+engine.defineTemplate({
+  name: 'expense-report',
+  schema: ExpenseSchema,
+  buildChain: async (data, tenantId) => {
+    // Convert to USD for threshold comparison (locked at submission time)
+    const amountUSD = await fx.convert(data.totalAmount, data.currency, 'USD');
+    const levels = [];
+
+    // Level 1: Direct manager always
+    levels.push({
+      levelOrder: 1,
+      approvers: [{ approverType: 'role', value: 'direct-manager' }],
+      slaHours: 48,
+    });
+
+    // Finance review for amounts over $500
+    if (amountUSD > 500) {
+      levels.push({
+        levelOrder: 2,
+        approvers: [{ approverType: 'role', value: 'finance-controller' }],
+        slaHours: 72,
+      });
+    }
+
+    // CFO sign-off for amounts over $2,000
+    if (amountUSD > 2_000) {
+      levels.push({
+        levelOrder: 3,
+        approvers: [{ approverType: 'role', value: 'cfo' }],
+        slaHours: 96,
+      });
+    }
+
+    // Compliance review for all international expenses
+    if (data.isInternational) {
+      levels.push({
+        levelOrder: levels.length + 1,
+        approvers: [{ approverType: 'role', value: 'compliance-officer' }],
+        slaHours: 72,
+      });
+    }
+
+    return { levels, mode: 'sequential' };
+  },
+});`);
+
+const dupeCode = hl(`// Detect duplicate expense reports before submitting
+async function detectDuplicate(
+  tenantId: string,
+  employeeId: string,
+  category: string,
+  totalAmount: number,
+  currency: string
+): Promise<boolean> {
+  const recent = await db.query(
+    \`SELECT id FROM expense_instances
+     WHERE tenant_id = $1
+       AND submitted_by = $2
+       AND data->>'category' = $3
+       AND ABS((data->>'totalAmount')::numeric - $4) < 0.01
+       AND data->>'currency' = $5
+       AND submitted_at > NOW() - INTERVAL '7 days'
+       AND status != 'rejected'\`,
+    [tenantId, employeeId, category, totalAmount, currency]
+  );
+  return recent.rowCount > 0;
+}
+
+const isDuplicate = await detectDuplicate(
+  tenantId, employeeId, category, amount, currency
+);
+if (isDuplicate) {
+  throw new Error('Duplicate expense report detected within the last 7 days');
+}`);
+
+const receiptCode = hl(`// Validate receipts before allowing submission (IAuthorizationPolicy)
+class ReceiptPolicy implements IAuthorizationPolicy {
+  async authorize(ctx: AuthorizationContext) {
+    if (ctx.operation !== 'submit') return undefined; // only validate on submit
+
+    const { receipts, category, totalAmount } = ctx.instance.data;
+    const requiresReceipt = category !== 'meals' || totalAmount > 25;
+
+    if (requiresReceipt && receipts.length === 0) {
+      return 'Receipt required for this expense category and amount';
+    }
+
+    return undefined; // allow
+  }
+}
+
+const engine = new ApprovalEngine({
+  storage: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  authorizationPolicy: new ReceiptPolicy(),
+});`);
+---
+
+<UseCaseLayout
+  title="Employee Expense Reimbursement"
+  description="Auto-approve small expenses after manager sign-off. Large or international expenses get Finance and Compliance review. Duplicate detection and receipt validation before the workflow starts."
+  tag="Finance & HR"
+>
+  <section class="uc-hero">
+    <div class="container">
+      <div class="uc-tag-row">
+        <span class="uc-tag" style="color:#0891b2">Finance &amp; HR</span>
+        <span class="uc-badge">expense-report</span>
+      </div>
+      <h1 class="uc-title">Employee Expense Reimbursement</h1>
+      <p class="uc-sub">
+        Small expenses route through manager only. Large ones escalate to Finance and CFO.
+        International expenses always get Compliance review. Currency is locked at submission
+        so FX movements after approval don't change the reimbursement amount.
+      </p>
+    </div>
+  </section>
+
+  <section class="chain-section">
+    <div class="container">
+      <div class="section-label-sm">Approval chain by amount</div>
+      <div class="chains-table">
+        <div class="chain-row">
+          <span class="chain-type">Under $500</span>
+          <div class="chain-flow">
+            <div class="cf-node cf-always"><span class="cf-name">Manager</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-done"><span class="cf-name">Approved</span></div>
+          </div>
+        </div>
+        <div class="chain-row">
+          <span class="chain-type">$500 – $2,000</span>
+          <div class="chain-flow">
+            <div class="cf-node cf-always"><span class="cf-name">Manager</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-cond"><span class="cf-name">Finance</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-done"><span class="cf-name">Approved</span></div>
+          </div>
+        </div>
+        <div class="chain-row">
+          <span class="chain-type">Over $2,000</span>
+          <div class="chain-flow">
+            <div class="cf-node cf-always"><span class="cf-name">Manager</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-cond"><span class="cf-name">Finance</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-cond"><span class="cf-name">CFO</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-done"><span class="cf-name">Approved</span></div>
+          </div>
+        </div>
+        <div class="chain-row">
+          <span class="chain-type">International (any)</span>
+          <div class="chain-flow">
+            <div class="cf-node cf-always"><span class="cf-name">Manager</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-cond"><span class="cf-name">Finance</span><span class="cf-badge-sm">if &gt;$500</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-always" style="border-color:#0891b2;background:#ecfeff"><span class="cf-name">Compliance</span></div>
+            <span class="cf-arrow">→</span>
+            <div class="cf-node cf-done"><span class="cf-name">Approved</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="code-section">
+    <div class="container code-grid">
+      <div class="code-meta">
+        <span class="section-label-sm">Configuration</span>
+        <h2 class="code-heading">Amount-tiered chain with FX lock</h2>
+        <p class="code-desc">
+          The expense amount is converted to USD <em>at submission time</em> for threshold
+          comparison. The original currency and amount are stored in the instance data.
+          Approvers see the original; thresholds use the locked USD equivalent.
+        </p>
+        <ul class="code-bullets">
+          <li>FX rate locked at submission — no drift after approval</li>
+          <li>International flag adds Compliance as a final gate</li>
+          <li>CFO level only activates above $2k</li>
+          <li>Short meal expenses skip receipt requirement (configurable)</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-dots"><span></span><span></span><span></span></span>
+          <span class="code-filename">expense-template.ts</span>
+        </div>
+        <pre class="code-pre"><code><Fragment set:html={configCode} /></code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="edges-section">
+    <div class="container">
+      <span class="section-label">Edge cases</span>
+      <h2 class="section-title">Three ways expense workflows break in production.</h2>
+      <p class="section-sub">Common failure modes in expense systems that <code>hierarchical-approval</code> prevents.</p>
+
+      <div class="edges-grid">
+        <div class="edge-card">
+          <div class="edge-num">01</div>
+          <h3 class="edge-title">Duplicate expense detection</h3>
+          <p class="edge-desc">
+            An employee accidentally submits the same expense twice — same category,
+            amount, and currency within days of each other. Both get approved,
+            finance pays twice.
+          </p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-dots"><span></span><span></span><span></span></span>
+              <span class="code-filename">duplicate-check.ts</span>
+            </div>
+            <pre class="code-pre"><code><Fragment set:html={dupeCode} /></code></pre>
+          </div>
+          <p class="edge-note">
+            Check before <code>engine.submit()</code>. The 7-day window and amount
+            tolerance prevent accidental double-billing.
+          </p>
+        </div>
+
+        <div class="edge-card">
+          <div class="edge-num">02</div>
+          <h3 class="edge-title">Receipt validation at the boundary</h3>
+          <p class="edge-desc">
+            An employee submits a $500 equipment expense with no receipts attached.
+            Finance approves it anyway — because there's no enforcement in the workflow itself.
+          </p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-dots"><span></span><span></span><span></span></span>
+              <span class="code-filename">receipt-policy.ts</span>
+            </div>
+            <pre class="code-pre"><code><Fragment set:html={receiptCode} /></code></pre>
+          </div>
+          <p class="edge-note">
+            <code>IAuthorizationPolicy</code> blocks <code>submit</code> if the receipts
+            array is empty for categories that require them. Enforced by the engine — not by the UI.
+          </p>
+        </div>
+
+        <div class="edge-card">
+          <div class="edge-num">03</div>
+          <h3 class="edge-title">Foreign currency amount drift</h3>
+          <p class="edge-desc">
+            An employee submits a €1,800 expense (below the $2k CFO threshold at today's rate).
+            By the time Finance approves it two weeks later, the rate has moved — the expense
+            is now over the threshold.
+          </p>
+          <div class="edge-solution">
+            <div class="solution-step">
+              <span class="step-num">1</span>
+              <span>At <code>engine.submit()</code>, call <code>fx.convert()</code> and store both the original and USD amount in the instance data</span>
+            </div>
+            <div class="solution-step">
+              <span class="step-num">2</span>
+              <span>Threshold decisions in <code>buildChain</code> use the locked USD amount, not a live rate</span>
+            </div>
+            <div class="solution-step">
+              <span class="step-num">3</span>
+              <span>Finance approves what was submitted — no surprises from currency movement</span>
+            </div>
+          </div>
+          <p class="edge-note">
+            The chain is built once at submission. Subsequent FX changes don't alter
+            the approval requirements for that instance.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="related-section">
+    <div class="container">
+      <h2 class="related-title">Related use cases</h2>
+      <div class="related-grid">
+        <a href="/use-cases/accounts-payable/" class="related-card">
+          <span class="related-tag">Finance & ERP</span>
+          <span class="related-name">Accounts Payable →</span>
+        </a>
+        <a href="/use-cases/hr-leave/" class="related-card">
+          <span class="related-tag">HR Systems</span>
+          <span class="related-name">HR Leave Requests →</span>
+        </a>
+        <a href="/use-cases/purchase-orders/" class="related-card">
+          <span class="related-tag">Procurement</span>
+          <span class="related-name">Purchase Orders →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+</UseCaseLayout>
+
+<style>
+  .uc-hero { padding-block: 3.5rem 2.5rem; background: var(--bg); border-bottom: 1px solid var(--border-light); }
+  .uc-tag-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; }
+  .uc-tag { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
+  .uc-badge { font-family: var(--font-mono); font-size: 0.7rem; background: var(--bg-alt); border: 1px solid var(--border-light); color: var(--text-3); padding: 0.175rem 0.5rem; border-radius: 4px; }
+  .uc-title { font-size: clamp(1.75rem, 3.5vw, 2.75rem); font-weight: 700; letter-spacing: -0.03em; margin-bottom: 1rem; }
+  .uc-sub { font-size: 1.0625rem; color: var(--text-2); line-height: 1.65; max-width: 58ch; }
+
+  .chain-section { padding-block: 2.5rem; background: var(--bg-alt); border-bottom: 1px solid var(--border-light); }
+  .section-label-sm { font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); display: block; margin-bottom: 1.25rem; }
+  .chains-table { display: flex; flex-direction: column; gap: 0.625rem; }
+  .chain-row { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
+  .chain-type { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-3); min-width: 120px; }
+  .chain-flow { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .cf-node { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.5rem 0.75rem; border-radius: var(--radius); border: 1.5px solid var(--border); background: white; min-width: 72px; }
+  .cf-always { border-color: var(--accent); background: var(--accent-bg); }
+  .cf-cond   { border-color: var(--border-light); }
+  .cf-done   { border-color: var(--accent); background: #d1fae5; }
+  .cf-name { font-size: 0.75rem; font-weight: 600; color: var(--text); }
+  .cf-badge-sm { font-family: var(--font-mono); font-size: 0.5rem; color: var(--text-3); }
+  .cf-arrow { color: var(--border); font-size: 1.25rem; }
+
+  .code-section { padding-block: 4rem; background: var(--bg); border-top: 1px solid var(--border-light); }
+  .code-grid { display: grid; grid-template-columns: 280px 1fr; gap: 3rem; align-items: start; }
+  .code-heading { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.75rem; margin-top: 0.5rem; }
+  .code-desc { font-size: 0.875rem; color: var(--text-2); line-height: 1.65; margin-bottom: 1rem; }
+  .code-desc em { font-style: italic; }
+  .code-desc code, .edge-note code, .solution-step code { font-family: var(--font-mono); font-size: 0.875em; background: var(--bg-alt); padding: 0.1em 0.3em; border-radius: 3px; color: var(--text); }
+  .code-bullets { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .code-bullets li { font-size: 0.8125rem; color: var(--text-2); padding-left: 1.25rem; position: relative; line-height: 1.5; }
+  .code-bullets li::before { content: '✓'; position: absolute; left: 0; color: var(--accent); font-size: 0.75rem; font-weight: 700; }
+
+  .code-block { background: #1c1c1e; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid #3a3a3c; }
+  .code-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.875rem; background: #2c2c2e; border-bottom: 1px solid #3a3a3c; }
+  .code-dots { display: flex; gap: 0.3rem; }
+  .code-dots span { width: 10px; height: 10px; border-radius: 50%; }
+  .code-dots span:nth-child(1) { background: #ff5f57; }
+  .code-dots span:nth-child(2) { background: #febc2e; }
+  .code-dots span:nth-child(3) { background: #28c840; }
+  .code-filename { font-family: var(--font-mono); font-size: 0.6875rem; color: #8e8e93; }
+  .code-pre { padding: 1rem 1.125rem; overflow-x: auto; font-size: 0.75rem; line-height: 1.7; color: #e6edf3; scrollbar-width: thin; scrollbar-color: #3a3a3c transparent; }
+  .code-pre :global(.k) { color: #ff7b72; }
+  .code-pre :global(.s) { color: #a5d6ff; }
+  .code-pre :global(.c) { color: #8b949e; font-style: italic; }
+  .code-pre :global(.n) { color: #79c0ff; }
+
+  .edges-section { padding-block: 5rem; background: var(--bg-alt); border-top: 1px solid var(--border-light); }
+  .section-sub { margin-bottom: 3rem; }
+  .section-sub code { font-family: var(--font-mono); font-size: 0.9em; color: var(--accent); background: var(--accent-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+  .edges-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; }
+  .edge-card { background: white; border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 1.5rem; display: flex; flex-direction: column; gap: 0.875rem; box-shadow: var(--shadow-xs); }
+  .edge-num { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; }
+  .edge-title { font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+  .edge-desc { font-size: 0.8125rem; color: var(--text-2); line-height: 1.6; }
+  .edge-note { font-size: 0.7875rem; color: var(--text-3); line-height: 1.55; padding-top: 0.5rem; border-top: 1px solid var(--border-light); }
+  .edge-solution { display: flex; flex-direction: column; gap: 0.5rem; }
+  .solution-step { display: flex; align-items: flex-start; gap: 0.625rem; font-size: 0.8125rem; color: var(--text-2); line-height: 1.5; }
+  .step-num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+
+  .related-section { padding-block: 3.5rem; background: var(--bg); border-top: 1px solid var(--border-light); }
+  .related-title { font-size: 1.125rem; font-weight: 700; margin-bottom: 1.25rem; letter-spacing: -0.01em; }
+  .related-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
+  .related-card { display: flex; flex-direction: column; gap: 0.375rem; padding: 1rem 1.25rem; background: var(--bg-alt); border: 1px solid var(--border-light); border-radius: var(--radius); text-decoration: none; transition: background 0.15s; }
+  .related-card:hover { background: white; text-decoration: none; }
+  .related-tag { font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); }
+  .related-name { font-size: 0.9375rem; font-weight: 600; color: var(--accent); }
+
+  @media (max-width: 860px) {
+    .code-grid { grid-template-columns: 1fr; }
+    .edges-grid { grid-template-columns: 1fr; }
+    .related-grid { grid-template-columns: 1fr; }
+  }
+</style>

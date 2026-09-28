@@ -1,0 +1,11 @@
+# dependencies and build output
+node_modules/
+dist/
+dist.zip
+.astro/
+
+# unpublished drafts stay local
+content-drafts/
+
+# OS noise
+.DS_Store

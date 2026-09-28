@@ -1,0 +1,457 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+
+const title = 'Interactive Playground — hierarchical-approval';
+const description =
+  'Try the hierarchical-approval engine in your browser: build a multi-level purchase-order approval chain, approve or reject each level, and watch the immutable audit trail — then run the real engine on StackBlitz.';
+
+const STACKBLITZ =
+  'https://stackblitz.com/github/matthews-wong/hierarchical-approval/tree/main/examples/playground?embed=1&file=index.mjs&view=editor&hideNavigation=1';
+
+// Rendered via set:html so the literal braces aren't parsed as Astro expressions.
+const configHtml = `engine.defineTemplate({
+  name: <span class="s">'Purchase Order'</span>,
+  levels: [
+    { level: <span class="n">1</span>, name: <span class="s">'Line Manager'</span>, mode: <span class="s">'any'</span> },
+    { level: <span class="n">2</span>, name: <span class="s">'Finance'</span>,      mode: <span class="s">'any'</span> },
+  ],
+  conditions: [{
+    when: { field: <span class="s">'amount'</span>, operator: <span class="s">'&gt;'</span>, value: <span class="n">10_000</span> },
+    addLevels: [{ level: <span class="n">3</span>, name: <span class="s">'CFO'</span>, mode: <span class="s">'any'</span> }],
+  }],
+});`;
+---
+
+<Layout title={title} description={description}>
+  <Nav />
+  <main id="main-content">
+    <section class="section pg-hero">
+      <div class="container">
+        <span class="section-label">Interactive playground</span>
+        <h1 class="pg-title">See an approval chain react — live.</h1>
+        <p class="pg-sub">
+          Set an order amount and drive it through the chain. Levels resolve in sequence, a CFO
+          level is inserted automatically for orders over $10,000, and every action is written to an
+          immutable audit trail — exactly the behavior the library gives you in code.
+        </p>
+      </div>
+    </section>
+
+    <section class="pg-demo-wrap">
+      <div class="container pg-grid">
+        <!-- Config / submit -->
+        <div class="pg-panel">
+          <div class="pg-panel-head">Template &amp; submission</div>
+          <div class="pg-panel-body">
+            <pre class="pg-code" aria-hidden="true"><code set:html={configHtml}></code></pre>
+
+            <label class="pg-field">
+              <span>Order amount (USD)</span>
+              <input id="pg-amount" type="number" min="0" step="500" value="4000" />
+            </label>
+            <div class="pg-actions">
+              <button id="pg-submit" class="pg-btn pg-btn-primary" type="button">Submit for approval</button>
+              <button id="pg-reset" class="pg-btn" type="button">Reset</button>
+            </div>
+            <p class="pg-hint">Try <code>4000</code> (2 levels) vs <code>15000</code> (CFO level added).</p>
+          </div>
+        </div>
+
+        <!-- Live chain -->
+        <div class="pg-panel">
+          <div class="pg-panel-head">
+            Approval chain
+            <span id="pg-status" class="pg-badge pg-badge-idle">idle</span>
+          </div>
+          <div class="pg-panel-body">
+            <ol id="pg-chain" class="pg-chain" aria-live="polite"></ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit trail -->
+      <div class="container">
+        <div class="pg-panel pg-audit">
+          <div class="pg-panel-head">Audit trail (append-only)</div>
+          <div class="pg-panel-body">
+            <ol id="pg-audit" class="pg-log" aria-live="polite"></ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real engine -->
+    <section class="section pg-real">
+      <div class="container">
+        <span class="section-label">Run the real engine</span>
+        <h2 class="section-title">This is a visual demo. Want the actual library?</h2>
+        <p class="section-sub">
+          The playground above illustrates the flow. Below runs the real <code>hierarchical-approval</code>
+          package — the same engine you install — live in your browser.
+        </p>
+
+        <div class="pg-real-actions">
+          <a class="pg-btn pg-btn-primary" href="https://npm.runkit.com/hierarchical-approval" target="_blank" rel="noopener noreferrer">▶ Run on RunKit</a>
+          <a class="pg-btn" href="https://stackblitz.com/github/matthews-wong/hierarchical-approval/tree/main/examples/playground?file=index.mjs" target="_blank" rel="noopener noreferrer">Open full playground on StackBlitz ↗</a>
+        </div>
+
+        <div class="pg-embed">
+          <iframe
+            src={STACKBLITZ}
+            title="hierarchical-approval playground on StackBlitz"
+            loading="lazy"
+            allow="clipboard-write"
+          ></iframe>
+        </div>
+
+        <pre class="pg-install"><code>npm install hierarchical-approval</code></pre>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  .pg-hero { padding-bottom: 2rem; }
+  .pg-title {
+    font-size: clamp(2rem, 5vw, 3rem);
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+  }
+  .pg-sub {
+    font-size: 1.0625rem;
+    color: var(--text-2);
+    max-width: 60ch;
+    line-height: 1.7;
+  }
+
+  .pg-demo-wrap { padding-bottom: 3rem; }
+  .pg-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .pg-grid { grid-template-columns: 1fr; }
+  }
+
+  .pg-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .pg-audit { margin-top: 1.5rem; }
+  .pg-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.875rem 1.25rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .pg-panel-body { padding: 1.25rem; }
+
+  .pg-code {
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    padding: 1rem;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    margin-bottom: 1.25rem;
+    color: var(--text);
+  }
+  .pg-code .s { color: #b4531b; }
+  .pg-code .n { color: #1a7a45; }
+
+  .pg-field { display: block; margin-bottom: 1rem; }
+  .pg-field span {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    margin-bottom: 0.375rem;
+  }
+  .pg-field input {
+    width: 100%;
+    font: inherit;
+    font-family: var(--font-mono);
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+  }
+  .pg-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .pg-actions { display: flex; gap: 0.625rem; flex-wrap: wrap; }
+  .pg-btn {
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    padding: 0.5625rem 1.125rem;
+    border-radius: 980px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .pg-btn:hover { background: var(--bg-alt); text-decoration: none; }
+  .pg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pg-btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .pg-btn-primary:hover { opacity: 0.9; background: var(--accent); }
+  .pg-hint { margin-top: 0.875rem; font-size: 0.8125rem; color: var(--text-3); }
+  .pg-hint code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 4px; }
+
+  .pg-badge {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.55rem;
+    border-radius: 980px;
+  }
+  .pg-badge-idle { background: var(--border-light); color: var(--text-2); }
+  .pg-badge-pending { background: var(--amber-bg); color: var(--amber); }
+  .pg-badge-approved { background: var(--accent-bg); color: var(--accent); }
+  .pg-badge-rejected { background: #fdecec; color: #c0392b; }
+
+  .pg-chain { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; }
+  .pg-chain:empty::after {
+    content: 'Submit an order to build the chain.';
+    color: var(--text-3);
+    font-size: 0.9375rem;
+  }
+  .pg-level {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 0.875rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    background: var(--bg);
+  }
+  .pg-level[data-state='current'] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-mid); }
+  .pg-level[data-state='approved'] { opacity: 0.7; }
+  .pg-level[data-state='waiting'] { opacity: 0.55; }
+  .pg-dot {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 0.75rem; font-weight: 700;
+    background: var(--border-light); color: var(--text-2);
+  }
+  .pg-level[data-state='approved'] .pg-dot { background: var(--accent); color: #fff; }
+  .pg-level[data-state='current'] .pg-dot { background: var(--amber); color: #fff; }
+  .pg-level[data-state='rejected'] .pg-dot { background: #c0392b; color: #fff; }
+  .pg-level-info { flex: 1; min-width: 0; }
+  .pg-level-name { font-weight: 600; font-size: 0.9375rem; }
+  .pg-level-meta { font-size: 0.8125rem; color: var(--text-2); font-family: var(--font-mono); }
+  .pg-level-actions { display: flex; gap: 0.5rem; }
+  .pg-mini {
+    font: inherit; font-size: 0.8125rem; font-weight: 600;
+    padding: 0.375rem 0.75rem; border-radius: 8px; cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text);
+  }
+  .pg-mini-approve { border-color: var(--accent); color: var(--accent); }
+  .pg-mini-approve:hover { background: var(--accent-bg); }
+  .pg-mini-reject { border-color: #e5b3ad; color: #c0392b; }
+  .pg-mini-reject:hover { background: #fdecec; }
+
+  .pg-log { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; font-family: var(--font-mono); font-size: 0.8125rem; }
+  .pg-log:empty::after { content: 'No events yet.'; color: var(--text-3); font-family: var(--font); }
+  .pg-log li { display: flex; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px dashed var(--border-light); }
+  .pg-log .t { color: var(--text-3); flex-shrink: 0; }
+  .pg-log .ev { color: var(--accent); font-weight: 600; flex-shrink: 0; min-width: 12ch; }
+  .pg-log .ev.rej { color: #c0392b; }
+
+  .pg-real { background: var(--bg-alt); }
+  .pg-real-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.75rem 0; }
+  .pg-embed {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    background: #0b0b0d;
+  }
+  .pg-embed iframe { width: 100%; height: 520px; border: 0; display: block; }
+  .pg-install {
+    margin-top: 1.5rem;
+    background: var(--text);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 0.875rem 1.25rem;
+    font-size: 0.9375rem;
+    overflow-x: auto;
+  }
+</style>
+
+<script>
+  type Level = { level: number; name: string; approver: string };
+  type State = 'waiting' | 'current' | 'approved' | 'rejected';
+
+  const BASE_LEVELS: Level[] = [
+    { level: 1, name: 'Line Manager', approver: 'manager_alice' },
+    { level: 2, name: 'Finance', approver: 'finance_bob' },
+  ];
+  const CFO_LEVEL: Level = { level: 3, name: 'CFO', approver: 'cfo_carol' };
+  const CFO_THRESHOLD = 10_000;
+
+  const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+  const chainEl = $('pg-chain');
+  const auditEl = $('pg-audit');
+  const statusEl = $('pg-status');
+  const amountEl = $<HTMLInputElement>('pg-amount');
+
+  let levels: Level[] = [];
+  let cursor = 0; // index of the current (pending) level
+  let status: 'idle' | 'pending' | 'approved' | 'rejected' = 'idle';
+  let clock = 0;
+
+  function stamp(): string {
+    // Deterministic monotonic pseudo-timestamp for the demo log.
+    clock += 1;
+    const s = String(clock).padStart(2, '0');
+    return `T+${s}s`;
+  }
+
+  function log(event: string, detail: string, rejected = false): void {
+    const li = document.createElement('li');
+    const t = document.createElement('span');
+    t.className = 't';
+    t.textContent = stamp();
+    const ev = document.createElement('span');
+    ev.className = rejected ? 'ev rej' : 'ev';
+    ev.textContent = event;
+    const d = document.createElement('span');
+    d.textContent = detail;
+    li.append(t, ev, d);
+    auditEl.appendChild(li);
+  }
+
+  function setStatus(next: typeof status): void {
+    status = next;
+    statusEl.className = `pg-badge pg-badge-${next}`;
+    statusEl.textContent = next;
+  }
+
+  function levelState(i: number): State {
+    if (status === 'rejected' && i === cursor) return 'rejected';
+    if (i < cursor) return 'approved';
+    if (i === cursor && status === 'pending') return 'current';
+    if (i === cursor && status === 'approved') return 'approved';
+    return 'waiting';
+  }
+
+  function render(): void {
+    chainEl.innerHTML = '';
+    levels.forEach((lvl, i) => {
+      const state = levelState(i);
+      const li = document.createElement('li');
+      li.className = 'pg-level';
+      li.dataset.state = state;
+
+      const dot = document.createElement('span');
+      dot.className = 'pg-dot';
+      dot.textContent = state === 'approved' ? '✓' : state === 'rejected' ? '✕' : String(lvl.level);
+
+      const info = document.createElement('div');
+      info.className = 'pg-level-info';
+      const name = document.createElement('div');
+      name.className = 'pg-level-name';
+      name.textContent = lvl.name;
+      const meta = document.createElement('div');
+      meta.className = 'pg-level-meta';
+      meta.textContent = `${lvl.approver} · mode: any`;
+      info.append(name, meta);
+
+      li.append(dot, info);
+
+      if (state === 'current') {
+        const actions = document.createElement('div');
+        actions.className = 'pg-level-actions';
+        const approve = document.createElement('button');
+        approve.className = 'pg-mini pg-mini-approve';
+        approve.type = 'button';
+        approve.textContent = 'Approve';
+        approve.addEventListener('click', () => decide(true));
+        const reject = document.createElement('button');
+        reject.className = 'pg-mini pg-mini-reject';
+        reject.type = 'button';
+        reject.textContent = 'Reject';
+        reject.addEventListener('click', () => decide(false));
+        actions.append(approve, reject);
+        li.append(actions);
+      }
+      chainEl.appendChild(li);
+    });
+  }
+
+  function decide(approved: boolean): void {
+    if (status !== 'pending') return;
+    const lvl = levels[cursor];
+    if (!approved) {
+      setStatus('rejected');
+      log('rejected', `${lvl.approver} rejected at level ${lvl.level} (${lvl.name})`, true);
+      render();
+      return;
+    }
+    log('approved', `${lvl.approver} approved level ${lvl.level} (${lvl.name})`);
+    if (cursor === levels.length - 1) {
+      cursor += 1;
+      setStatus('approved');
+      log('completed', 'all levels approved — request is APPROVED');
+    } else {
+      cursor += 1;
+      log('level_advanced', `advanced to level ${levels[cursor].level} → ${levels[cursor].approver}`);
+    }
+    render();
+  }
+
+  function submit(): void {
+    const amount = Math.max(0, Number(amountEl.value) || 0);
+    levels = [...BASE_LEVELS];
+    if (amount > CFO_THRESHOLD) levels = [...levels, CFO_LEVEL];
+    cursor = 0;
+    clock = 0;
+    auditEl.innerHTML = '';
+    setStatus('pending');
+    const added = amount > CFO_THRESHOLD ? ' (CFO level added by condition)' : '';
+    log('submitted', `PO for $${amount.toLocaleString('en-US')}${added} → ${levels[0].approver}`);
+    render();
+  }
+
+  function reset(): void {
+    levels = [];
+    cursor = 0;
+    clock = 0;
+    auditEl.innerHTML = '';
+    setStatus('idle');
+    render();
+  }
+
+  $('pg-submit').addEventListener('click', submit);
+  $('pg-reset').addEventListener('click', reset);
+  render();
+</script>

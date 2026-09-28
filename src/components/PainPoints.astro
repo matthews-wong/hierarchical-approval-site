@@ -1,0 +1,167 @@
+---
+const painPoints = [
+  { problem: 'Hardcoded approval chains',                  solution: 'Named templates — define once, reuse across any document type' },
+  { problem: 'Race conditions on concurrent approvals',    solution: 'Optimistic locking with a version field + configurable retry policy' },
+  { problem: 'Duplicate submissions on retry or double-click', solution: 'Built-in idempotency keyed by tenant + document + template' },
+  { problem: 'No compliance trail',                        solution: 'Immutable audit log with old/new state diff on every mutation' },
+  { problem: 'new Date() makes tests unreliable',          solution: 'Injectable Clock interface — freeze time without monkey-patching' },
+  { problem: '"Escalate to skip-level after 48 h"',        solution: 'Built-in escalation scheduler with delegation + time-limited proxying' },
+  { problem: 'SLA as an afterthought',                     solution: 'SLA tracking baked in; approval:sla_breached event fires automatically' },
+  { problem: 'Test suites hit a real database',            solution: 'ApprovalTestKit + ManualClock — deterministic, zero I/O' },
+  { problem: 'Kafka/Datadog/BullMQ integration needed',   solution: 'Six pluggable adapter interfaces for every cross-cutting concern' },
+];
+---
+
+<section class="section pain" id="why" aria-labelledby="pain-title">
+  <div class="container">
+    <div class="pain-header">
+      <span class="section-label">Why this library</span>
+      <h2 class="section-title pain-title" id="pain-title">
+        Approval workflows are deceptively simple until they aren't.
+      </h2>
+      <p class="section-sub">
+        Most teams start with <code>if (amount &gt; 1000) notifyManager()</code> and end up rewriting
+        it every six months. This library gives that logic a permanent, tested home.
+      </p>
+    </div>
+
+    <div class="table-list" role="table" aria-label="Pain points and solutions">
+      <div class="table-head" role="row">
+        <div class="col-without" role="columnheader">Without hierarchical-approval</div>
+        <div class="col-with" role="columnheader">With hierarchical-approval</div>
+      </div>
+      {painPoints.map((p) => (
+        <div class="table-row" role="row">
+          <div class="col-problem" role="cell">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+              <circle cx="6.5" cy="6.5" r="6" stroke="#aeaeb2" stroke-width="1.25"/>
+              <path d="M4.5 4.5l4 4M8.5 4.5l-4 4" stroke="#aeaeb2" stroke-width="1.25" stroke-linecap="round"/>
+            </svg>
+            {p.problem}
+          </div>
+          <div class="col-solution" role="cell">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+              <circle cx="6.5" cy="6.5" r="6" stroke="#1a7a45" stroke-width="1.25"/>
+              <path d="M4 6.5l2 2 3-3" stroke="#1a7a45" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>
+              <span class="solution-label" aria-hidden="true">With this library: </span>{p.solution}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .pain {
+    background: var(--bg-alt);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .pain-header {
+    margin-bottom: 3rem;
+  }
+
+  .pain-title { max-width: 22ch; }
+
+  .section-sub {
+    margin-top: 1rem;
+  }
+
+  .section-sub code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: white;
+    border: 1px solid var(--border);
+    padding: 0.1em 0.375em;
+    border-radius: 5px;
+    color: var(--text);
+  }
+
+  .table-list {
+    background: white;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .table-head {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border-light);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .col-without {
+    color: var(--text-3);
+    padding: 0.75rem 1.5rem;
+    border-right: 1px solid var(--border-light);
+  }
+
+  .col-with {
+    color: var(--accent);
+    padding: 0.75rem 1.5rem;
+  }
+
+  .table-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.12s;
+  }
+
+  .table-row:last-child { border-bottom: none; }
+
+  .table-row:hover { background: #fafafa; }
+
+  .col-problem,
+  .col-solution {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    padding: 0.9375rem 1.5rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .col-problem {
+    color: var(--text-2);
+    border-right: 1px solid var(--border-light);
+  }
+
+  .col-solution {
+    color: var(--text);
+  }
+
+  .col-problem svg,
+  .col-solution svg {
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+
+  .solution-label { display: none; }
+
+  @media (max-width: 640px) {
+    .table-head { grid-template-columns: 1fr; }
+    .table-head div:last-child { display: none; }
+    .table-row { grid-template-columns: 1fr; }
+    .col-problem { border-right: none; border-bottom: 1px solid var(--border-light); }
+    .solution-label {
+      display: inline;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+  }
+</style>

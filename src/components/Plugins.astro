@@ -1,0 +1,418 @@
+---
+function hl(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(\/\/.*)/g, '<span class="c">$1</span>')
+    .replace(/(`(?:[^`\\]|\\.)*`)/g, '<span class="s">$1</span>')
+    .replace(/('(?:[^'\\]|\\.)*')/g, '<span class="s">$1</span>')
+    .replace(/\b(async|await|const|class|new|import|from)\b/g, '<span class="k">$1</span>');
+}
+
+const families = [
+  {
+    name: 'Tamper-evident audit',
+    subpath: 'hierarchical-approval/plugins/audit',
+    tagline: 'Make the immutable audit trail provably immutable — and safe to ship to external sinks.',
+    icon: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>`,
+    includes: [
+      ['HashChainAuditAdapter', 'SHA-256 chain; verify() catches edits, deletions, reorders & truncation'],
+      ['RedactingAuditAdapter', 'strips PII before external sinks — originals never mutated'],
+      ['CompositeAuditAdapter', 'fan out to Kafka, S3, CloudTrail with per-sink fault isolation'],
+    ],
+    snippet: `import { HashChainAuditAdapter } from
+  'hierarchical-approval/plugins/audit';
+
+const audit = new HashChainAuditAdapter();
+const engine = new ApprovalEngine({ adapter, auditAdapter: audit });
+
+// Prove the log was never altered:
+audit.verify(tenantId, instanceId);
+// → { ok: true } | { ok: false, brokenAt: 3 }`,
+    color: '#b45309', colorBg: '#fef9ee',
+  },
+  {
+    name: 'Observability',
+    subpath: 'hierarchical-approval/plugins/metrics',
+    tagline: 'A Prometheus endpoint and dashboard-ready snapshots, with zero dependencies.',
+    icon: `<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,
+    includes: [
+      ['PrometheusMetricsAdapter', 'scrape() returns valid Prometheus exposition text'],
+      ['InMemoryMetricsAdapter', 'snapshot() with count/sum/min/max/avg/p50/p95'],
+      ['CompositeMetricsAdapter', 'feed several backends from one engine'],
+    ],
+    snippet: `import { PrometheusMetricsAdapter } from
+  'hierarchical-approval/plugins/metrics';
+
+const metrics = new PrometheusMetricsAdapter();
+new ApprovalEngine({ adapter, metricsAdapter: metrics });
+
+// Expose on /metrics:
+res.type('text/plain').send(metrics.scrape());`,
+    color: '#1a7a45', colorBg: '#f0f9f4',
+  },
+  {
+    name: 'Resilience & access',
+    subpath: 'hierarchical-approval/plugins/resilience',
+    tagline: 'Role-based access, abuse protection and structured logging — closed by default.',
+    icon: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`,
+    includes: [
+      ['RbacAuthorizationPolicy', 'per-operation role rules, default-deny posture'],
+      ['RateLimitMiddleware', 'token-bucket throttling per actor + operation'],
+      ['LoggingMiddleware', 'structured before / after / onError with timings'],
+    ],
+    snippet: `import { RbacAuthorizationPolicy, RateLimitMiddleware }
+  from 'hierarchical-approval/plugins/resilience';
+
+new ApprovalEngine({
+  adapter,
+  authorizationPolicy: new RbacAuthorizationPolicy({
+    defaultMode: 'deny',
+    rules: { override: { roles: ['admin'] } },
+    roleProvider,
+  }),
+  middleware: [new RateLimitMiddleware({
+    capacity: 20, refillTokensPerSecond: 5,
+  })],
+});`,
+    color: '#dc2626', colorBg: '#fef2f2',
+  },
+  {
+    name: 'Reliable delivery',
+    subpath: 'hierarchical-approval/plugins/notify',
+    tagline: 'At-least-once notifications with retries, backoff and a dead-letter queue.',
+    icon: `<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>`,
+    includes: [
+      ['OutboxNotificationAdapter', 'transactional outbox + exponential backoff + dead-letter'],
+      ['TemplatedNotificationAdapter', 'render a human message per event type'],
+      ['CompositeNotificationAdapter', 'multi-channel fan-out, fault-isolated'],
+    ],
+    snippet: `import { OutboxNotificationAdapter } from
+  'hierarchical-approval/plugins/notify';
+
+const outbox = new OutboxNotificationAdapter({
+  transport: (event) => emailGateway.send(event),
+  maxAttempts: 5,
+});
+new ApprovalEngine({ adapter, notificationAdapter: outbox });
+
+await outbox.drain();        // deliver due items
+await outbox.deadLettered(); // inspect failures`,
+    color: '#1d6fe4', colorBg: '#eff6ff',
+  },
+  {
+    name: 'Distributed tracing',
+    subpath: 'hierarchical-approval/plugins/tracing',
+    tagline: 'One span per approval operation, on the OpenTelemetry shape — without the OpenTelemetry dependency.',
+    icon: `<circle cx="12" cy="12" r="3"/><path d="M12 2v7M12 15v7M2 12h7M15 12h7"/>`,
+    includes: [
+      ['TracingMiddleware', 'span approval.<op> with tenant, actor, instance & error-code attributes'],
+      ['ITracer port', 'structurally satisfied by a real @opentelemetry/api Tracer'],
+      ['noopTracer', 'the default — tracing costs nothing until you wire it'],
+    ],
+    snippet: `import { TracingMiddleware } from
+  'hierarchical-approval/plugins/tracing';
+
+// A real OTel tracer satisfies the port structurally —
+// no adapter, no extra dependency.
+new ApprovalEngine({
+  adapter,
+  middleware: [new TracingMiddleware({
+    tracer: otel.trace.getTracer('approvals'),
+  })],
+});`,
+    color: '#7c3aed', colorBg: '#f5f3ff',
+  },
+  {
+    name: 'Signed webhooks',
+    subpath: 'hierarchical-approval/plugins/webhook',
+    tagline: 'Deliver every lifecycle event to your endpoint, signed, retried, and verifiable at the far end.',
+    icon: `<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>`,
+    includes: [
+      ['WebhookNotificationAdapter', 'HMAC-SHA256 signature, per-request timeout, jittered backoff'],
+      ['Retry-After aware', 'retries 5xx / 408 / 429; other 4xx fail fast'],
+      ['HttpClient port', 'satisfied by the global fetch — zero new dependencies'],
+    ],
+    snippet: `import { WebhookNotificationAdapter } from
+  'hierarchical-approval/plugins/webhook';
+
+new ApprovalEngine({
+  adapter,
+  notificationAdapter: new WebhookNotificationAdapter({
+    url: 'https://erp.example.com/hooks/approvals',
+    secret: process.env.WEBHOOK_SECRET,
+  }),
+});
+
+// Receiver verifies: HMAC over \`<timestamp>.<body>\`
+// sent as  X-Approval-Signature: t=...,v1=...`,
+    color: '#0891b2', colorBg: '#ecfeff',
+  },
+  {
+    name: 'Pluggable scheduling',
+    subpath: 'hierarchical-approval/plugins/scheduler',
+    tagline: 'Drive escalation and SLA deadlines from your own job runner instead of an in-process timer.',
+    icon: `<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>`,
+    includes: [
+      ['InMemorySchedulerAdapter', 'setTimeout-based reference implementation, cancellable'],
+      ['ISchedulerAdapter port', 'back it with BullMQ, Temporal, cron — anything one-shot'],
+      ['Replaces polling', 'supply one and the built-in setInterval never starts'],
+    ],
+    snippet: `import { InMemorySchedulerAdapter } from
+  'hierarchical-approval/plugins/scheduler';
+
+// Or implement ISchedulerAdapter over BullMQ / Temporal
+// to survive restarts across a fleet.
+new ApprovalEngine({
+  adapter,
+  schedulerAdapter: new InMemorySchedulerAdapter(),
+});`,
+    color: '#ca8a04', colorBg: '#fefce8',
+  },
+];
+
+const cards = families.map((f) => ({ ...f, html: hl(f.snippet) }));
+---
+
+<section class="section plugins" id="plugins" aria-labelledby="plugins-title">
+  <div class="container">
+    <span class="section-label">Batteries included · Seven plug-ins as of 0.6</span>
+    <h2 class="section-title" id="plugins-title">Production plug-ins, not just interfaces.</h2>
+    <p class="section-sub">
+      The adapter ports above are contracts. These are the implementations — drop-in,
+      dependency-free modules for the concerns every enterprise audit asks about.
+      Each ships on its own import path, so you bundle only what you use.
+    </p>
+
+    <div class="plugin-grid">
+      {cards.map((f) => (
+        <article class="plugin-card">
+          <div class="plugin-head">
+            <div class="plugin-icon" style={`background:${f.colorBg};color:${f.color}`} aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <Fragment set:html={f.icon} />
+              </svg>
+            </div>
+            <div class="plugin-headtext">
+              <h3 class="plugin-name">{f.name}</h3>
+              <code class="plugin-path">{f.subpath}</code>
+            </div>
+          </div>
+
+          <p class="plugin-tagline">{f.tagline}</p>
+
+          <ul class="plugin-list">
+            {f.includes.map(([cls, desc]) => (
+              <li>
+                <code style={`color:${f.color}`}>{cls}</code>
+                <span>{desc}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div class="code-wrap">
+            <div class="code-header" aria-hidden="true">
+              <span class="code-dot" style={`background:${f.color}`}></span>
+              <span class="code-impl">{f.subpath}</span>
+            </div>
+            <pre class="code-pre"><code set:html={f.html}></code></pre>
+          </div>
+        </article>
+      ))}
+    </div>
+
+    <div class="plugin-foot">
+      <span class="pill"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Zero runtime dependencies</span>
+      <span class="pill"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Fully tree-shakeable</span>
+      <span class="pill"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Injectable clock & logger for tests</span>
+    </div>
+  </div>
+</section>
+
+<style>
+  .plugins {
+    background: var(--bg);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .section-sub { margin-bottom: 3rem; }
+
+  .plugin-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .plugin-card {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: var(--shadow-xs);
+    transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+  }
+
+  .plugin-card:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+    border-color: var(--border);
+  }
+
+  .plugin-head {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+  }
+
+  .plugin-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .plugin-headtext { min-width: 0; }
+
+  .plugin-name {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.15rem;
+  }
+
+  .plugin-path {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--text-3);
+    word-break: break-all;
+  }
+
+  .plugin-tagline {
+    font-size: 0.9375rem;
+    color: var(--text-2);
+    line-height: 1.55;
+    margin-top: -0.25rem;
+  }
+
+  .plugin-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  .plugin-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding-left: 0.875rem;
+    position: relative;
+    line-height: 1.45;
+  }
+
+  .plugin-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+
+  .plugin-list code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .plugin-list span {
+    font-size: 0.8125rem;
+    color: var(--text-2);
+  }
+
+  /* Dark code block — shared idiom with the Adapters section */
+  .code-wrap {
+    background: #1c1c1e;
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: auto;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    background: #2c2c2e;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .code-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  .code-impl {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: #8e8e93;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .code-pre {
+    padding: 0.875rem 1rem;
+    overflow-x: auto;
+    font-size: 0.72rem;
+    line-height: 1.7;
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a3c transparent;
+    color: #d1d5db;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .code-pre::-webkit-scrollbar { height: 3px; }
+  .code-pre::-webkit-scrollbar-track { background: transparent; }
+  .code-pre::-webkit-scrollbar-thumb { background: #3a3a3c; border-radius: 2px; }
+  .code-pre code { display: block; }
+  .code-pre :global(.k) { color: #c792ea; }
+  .code-pre :global(.s) { color: #fbbf24; }
+  .code-pre :global(.c) { color: #6b7280; font-style: italic; }
+
+  .plugin-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    margin-top: 2rem;
+    justify-content: center;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--accent);
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-mid);
+    padding: 0.375rem 0.75rem;
+    border-radius: 980px;
+  }
+
+  @media (max-width: 720px) {
+    .plugin-grid { grid-template-columns: 1fr; }
+    .code-pre { max-height: 220px; overflow-y: auto; }
+  }
+</style>

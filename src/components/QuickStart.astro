@@ -1,0 +1,275 @@
+---
+const code = `import { ApprovalEngine } from 'hierarchical-approval';
+import { MemoryAdapter } from 'hierarchical-approval/adapters/memory';
+
+const engine = new ApprovalEngine({
+  adapter: new MemoryAdapter(),
+  tenantId: 'acme',
+});
+
+// 1 — Define a reusable template
+await engine.defineTemplate({
+  name: 'purchase-order',
+  documentType: 'purchase_order',
+  levels: [
+    {
+      level: 1,
+      name: 'Manager',
+      approvers: [{ type: 'user', userId: 'mgr-1' }],
+      mode: 'any',
+    },
+  ],
+  // Finance level only activates above $10k
+  conditions: [
+    {
+      when: { field: 'amount', operator: '>', value: 10000 },
+      addLevels: [
+        {
+          level: 2,
+          name: 'Finance',
+          approvers: [{ type: 'role', role: 'finance-team' }],
+          mode: 'any',
+        },
+      ],
+    },
+  ],
+  slaDeadlineDays: 2,
+  allowOverride: true,
+});
+
+// 2 — Submit a document
+const instance = await engine.submit({
+  templateName: 'purchase-order',
+  documentId: 'po-0042',
+  documentType: 'purchase_order',
+  submittedBy: 'alice',
+  data: { amount: 15000, vendor: 'Acme Corp' },
+});
+// instance.levels has two levels because amount > 10000
+
+// 3 — Manager approves
+await engine.approve(instance.id, {
+  approverId: 'mgr-1',
+  comment: 'Looks good',
+});
+
+// 4 — Finance approves — instance is now 'approved'
+await engine.approve(instance.id, { approverId: 'fin-1' });
+
+await engine.shutdown();`;
+
+function highlight(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(\/\/.*)/g, '<span class="c">$1</span>')
+    .replace(/('(?:[^'\\]|\\.)*')/g, '<span class="s">$1</span>')
+    .replace(/\b(import|from|const|await|new|true|false|null|void|async|return)\b/g, '<span class="k">$1</span>')
+    .replace(/\b(ApprovalEngine|MemoryAdapter|engine|instance)\b/g, '<span class="v">$1</span>');
+}
+
+const highlighted = highlight(code);
+---
+
+<section class="section qs" id="quickstart" aria-labelledby="qs-title">
+  <div class="container">
+    <span class="section-label">Quick start</span>
+    <h2 class="section-title" id="qs-title">Running in under a minute.</h2>
+    <p class="section-sub">
+      The MemoryAdapter works out of the box — no database required for development or testing.
+      Swap in PostgresAdapter for production with a one-line change.
+    </p>
+
+    <div class="code-outer">
+      <div class="code-header">
+        <div class="win-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="file-name">index.ts</span>
+        <div class="code-pills">
+          <span class="pill pill-ts">TypeScript</span>
+          <span class="pill pill-esm">ESM + CJS</span>
+        </div>
+        <button class="copy-btn" data-copy={code} aria-label="Copy quickstart code">
+          <svg class="icon-copy" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <svg class="icon-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="code-scroll-wrap">
+        <pre class="code-pre"><code set:html={highlighted}></code></pre>
+      </div>
+    </div>
+
+    <div class="pg-note">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="pg-icon">
+        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+      </svg>
+      <span>
+        <strong>PostgreSQL for production:</strong>{' '}
+        install <code>pg @types/pg</code>, swap <code>MemoryAdapter</code> for{' '}
+        <code>new PostgresAdapter({'{'} connectionString {'}'}</code>, call <code>adapter.migrate()</code> once.
+      </span>
+    </div>
+  </div>
+</section>
+
+<style>
+  .qs {
+    background: var(--bg);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .section-sub { margin-bottom: 2.5rem; }
+
+  .code-outer {
+    background: #1c1c1e;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow);
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.125rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: #2c2c2e;
+  }
+
+  .win-dots {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .win-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #444;
+  }
+
+  .file-name {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: #8e8e93;
+    flex: 1;
+  }
+
+  .code-pills { display: flex; gap: 0.5rem; }
+
+  .pill {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    padding: 0.175rem 0.5rem;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
+
+  .pill-ts  { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .pill-esm { background: rgba(26,122,69,0.25); color: #4ade80; }
+
+  .code-scroll-wrap {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #444 transparent;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .code-scroll-wrap::-webkit-scrollbar { height: 4px; }
+  .code-scroll-wrap::-webkit-scrollbar-track { background: transparent; }
+  .code-scroll-wrap::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+
+  .code-pre {
+    padding: 1.5rem;
+    font-size: 0.8rem;
+    line-height: 1.75;
+    min-width: max-content;
+    color: #d1d5db;
+  }
+
+  @media (max-width: 768px) {
+    .code-scroll-wrap {
+      max-height: 340px;
+      overflow-y: auto;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .code-pre { padding: 1rem 1.25rem; font-size: 0.72rem; }
+  }
+
+  .code-pre code { display: block; }
+  .code-pre :global(.k) { color: #c792ea; }
+  .code-pre :global(.s) { color: #fbbf24; }
+  .code-pre :global(.v) { color: #82aaff; }
+  .code-pre :global(.c) { color: #6b7280; font-style: italic; }
+
+  .pg-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.9375rem 1.125rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  .copy-btn {
+    margin-left: auto;
+    padding: 0.375rem 0.5rem;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    color: #8e8e93;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .copy-btn:hover { color: #d1d5db; background: rgba(255,255,255,0.07); }
+  .copy-btn .icon-check { display: none; }
+  .copy-btn.copied .icon-copy { display: none; }
+  .copy-btn.copied .icon-check { display: block; color: #32d74b; }
+  .copy-btn.copied { border-color: rgba(50,215,75,0.3); background: rgba(50,215,75,0.08); }
+
+  .pg-icon { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+  .pg-note strong { color: var(--text); }
+  .pg-note code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    background: white;
+    border: 1px solid var(--border);
+    padding: 0.1em 0.3em;
+    border-radius: 4px;
+    color: var(--text);
+  }
+</style>
+
+<script>
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.getAttribute('data-copy') ?? '');
+        btn.classList.add('copied');
+        setTimeout(() => btn.classList.remove('copied'), 2000);
+      } catch {}
+    });
+  });
+</script>

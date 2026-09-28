@@ -1,0 +1,330 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+
+const title = 'Multi-Level Approval Workflows in Node.js — Without BPMN';
+const description =
+  'A hands-on guide to building sequential, conditional, multi-level approval chains in Node.js and TypeScript with the hierarchical-approval engine: templates, conditions, delegation, audit trails, and a NestJS integration — no BPMN or external orchestrator.';
+
+const pubDate = 'July 23, 2026';
+const readTime = '10 min';
+
+// Minimal syntax highlighter — output is injected via set:html so literal
+// braces in code samples are never parsed as Astro expressions.
+function hl(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(\/\/[^\n]*)/g, '<span class="c">$1</span>')
+    .replace(/('[^'\\]*(?:\\.[^'\\]*)*')/g, '<span class="s">$1</span>')
+    .replace(/("[^"\\]*(?:\\.[^"\\]*)*")/g, '<span class="s">$1</span>')
+    .replace(
+      /\b(async|await|const|let|if|else|return|new|import|from|export|class|constructor|private|readonly|type|interface)\b/g,
+      '<span class="k">$1</span>',
+    )
+    .replace(/\b([0-9][0-9_]*(?:\.[0-9]+)?)\b/g, '<span class="n">$1</span>');
+}
+
+const installCode = hl(`npm install hierarchical-approval
+# PostgreSQL is an optional peer dependency, only for production
+npm install pg @types/pg`);
+
+const templateCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
+import { MemoryAdapter } from 'hierarchical-approval/adapters/memory';
+
+const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+
+await engine.defineTemplate({
+  name: 'Purchase Order',
+  documentType: 'purchase_order',
+  levels: [
+    { level: 1, name: 'Line Manager', approvers: [{ type: 'user', userId: 'manager_alice' }], mode: 'any' },
+    { level: 2, name: 'Finance',      approvers: [{ type: 'user', userId: 'finance_bob' }],   mode: 'any' },
+  ],
+  // Orders over $10,000 automatically gain a CFO level:
+  conditions: [{
+    when: { field: 'amount', operator: '>', value: 10_000 },
+    addLevels: [{ level: 3, name: 'CFO', approvers: [{ type: 'user', userId: 'cfo_carol' }], mode: 'any' }],
+  }],
+});`);
+
+const submitCode = hl(`const po = await engine.submit({
+  templateName: 'Purchase Order',
+  documentId: 'PO-001',
+  documentType: 'purchase_order',
+  submittedBy: 'employee_jane',
+  data: { amount: 4_000, vendor: 'Acme Corp' },
+});
+
+await engine.approve(po.id, { approverId: 'manager_alice', comment: 'Budget available' });
+await engine.approve(po.id, { approverId: 'finance_bob' }); // → status: 'approved'`);
+
+const delegateCode = hl(`// Finance is on leave — hand the pending step to a colleague:
+await engine.delegate(po.id, {
+  fromApprover: 'finance_bob',
+  toApprover: 'finance_charlie',
+  reason: 'On leave until Monday',
+});
+
+// Or reject and stop the chain:
+await engine.reject(po.id, { approverId: 'manager_alice', reason: 'Not in this quarter budget' });`);
+
+const auditCode = hl(`const history = await engine.getHistory(po.id);
+// [
+//   { action: 'submitted', actorId: 'employee_jane', level: 1, timestamp: ... },
+//   { action: 'approved',  actorId: 'manager_alice', level: 1, timestamp: ... },
+//   { action: 'delegated', actorId: 'finance_bob', ... },
+//   ...
+// ]`);
+
+const nestCode = hl(`import { Module } from '@nestjs/common';
+import { HierarchicalApprovalModule } from 'hierarchical-approval/nestjs';
+import { MemoryAdapter } from 'hierarchical-approval/adapters/memory';
+
+@Module({
+  imports: [
+    HierarchicalApprovalModule.forRoot({ adapter: new MemoryAdapter(), isGlobal: true }),
+  ],
+})
+export class AppModule {}`);
+
+const nestServiceCode = hl(`import { Injectable } from '@nestjs/common';
+import { ApprovalEngine } from 'hierarchical-approval';
+import { InjectApprovalEngine } from 'hierarchical-approval/nestjs';
+
+@Injectable()
+export class InvoiceService {
+  constructor(@InjectApprovalEngine() private readonly approvals: ApprovalEngine) {}
+
+  submit(invoiceId: string, amount: number) {
+    return this.approvals.submit({
+      templateName: 'Invoice',
+      documentId: invoiceId,
+      documentType: 'invoice',
+      submittedBy: 'system',
+      data: { amount },
+    });
+  }
+}`);
+
+const pgCode = hl(`import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
+
+const adapter = new PostgresAdapter({ connectionString: process.env.DATABASE_URL });
+await adapter.migrate(); // create tables once, at startup
+
+const engine = new ApprovalEngine({ adapter });`);
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: title,
+  description,
+  datePublished: '2026-07-23',
+  author: { '@type': 'Person', name: 'Matthews Wong', url: 'https://www.matthewswong.com' },
+  publisher: { '@type': 'Person', name: 'Matthews Wong' },
+  mainEntityOfPage: 'https://hierarchical-approval.matthewswong.com/guide/multi-level-approval-workflows-in-node',
+};
+---
+
+<Layout title={`${title} — hierarchical-approval`} description={description}>
+  <Nav />
+  <main id="main-content">
+    <article class="guide">
+      <div class="container guide-container">
+        <div class="guide-breadcrumb">
+          <a href="/">Home</a> <span aria-hidden="true">/</span> <span aria-current="page">Guide</span>
+        </div>
+
+        <header class="guide-head">
+          <span class="section-label">Guide</span>
+          <h1 class="guide-title">{title}</h1>
+          <p class="guide-lede">
+            Approval chains are everywhere in enterprise software — purchase orders, expense reports,
+            leave requests, contracts. Yet most teams hand-roll them with a pile of <code>if</code>
+            statements and a <code>status</code> column, or reach for a heavyweight BPMN engine.
+            Here's a lighter way.
+          </p>
+          <div class="guide-meta">
+            <span>{pubDate}</span><span aria-hidden="true">·</span><span>{readTime} read</span>
+          </div>
+        </header>
+
+        <h2>The problem with rolling your own</h2>
+        <p>
+          A "simple" approval feature never stays simple. First it's one approver. Then it's
+          manager-then-finance. Then finance only above a threshold. Then someone goes on leave and
+          you need delegation. Then compliance asks for an immutable audit trail. Then two requests
+          race and your <code>status</code> column ends up in an impossible state.
+        </p>
+        <p>
+          BPMN engines (Camunda) and durable workflow runtimes (Temporal) can model this, but they
+          bring servers, DSLs, and operational weight that a CRUD app rarely wants.
+          <strong>hierarchical-approval</strong> is the middle ground: a focused, embeddable
+          TypeScript engine for multi-level approvals — with optimistic locking, idempotency, and a
+          tamper-evident audit trail — and nothing to deploy.
+        </p>
+
+        <h2>Install</h2>
+        <pre class="guide-code"><code set:html={installCode}></code></pre>
+
+        <h2>Define a template</h2>
+        <p>
+          A <em>template</em> describes the chain. Levels resolve in order; each level has a
+          <code>mode</code> (<code>any</code>, <code>all</code>, or a quorum). Conditions add levels
+          based on the document's data — here, orders over $10,000 get a CFO step.
+        </p>
+        <pre class="guide-code"><code set:html={templateCode}></code></pre>
+
+        <h2>Submit and approve</h2>
+        <p>
+          Submitting an instance evaluates the conditions and computes the chain. Each
+          <code>approve()</code> advances to the next level; the final approval flips the instance to
+          <code>approved</code>.
+        </p>
+        <pre class="guide-code"><code set:html={submitCode}></code></pre>
+        <p class="guide-tip">
+          👉 <a href="/playground">Try this exact flow in the interactive playground →</a>
+        </p>
+
+        <h2>Delegation and rejection</h2>
+        <p>
+          Real approvals aren't always a clean "yes." Approvers go on leave; requests get bounced.
+          Both are first-class — and both are recorded.
+        </p>
+        <pre class="guide-code"><code set:html={delegateCode}></code></pre>
+
+        <h2>The audit trail (and why locking matters)</h2>
+        <p>
+          Every action appends an immutable entry. This isn't a nice-to-have in ERP — it's what an
+          auditor asks for. And because every instance carries a <code>version</code>, concurrent
+          approvals can't silently clobber each other: the engine uses optimistic locking and throws
+          an <code>ApprovalConflictError</code> (retried automatically) instead of corrupting state.
+          Idempotency keys make a retried <code>submit()</code> safe, too.
+        </p>
+        <pre class="guide-code"><code set:html={auditCode}></code></pre>
+
+        <h2>Drop it into NestJS</h2>
+        <p>
+          If you're on NestJS, the <code>hierarchical-approval/nestjs</code> subpath provides a
+          module that wires the engine into DI. <code>@nestjs/common</code> is an optional peer
+          dependency — you only pull it in if you use it.
+        </p>
+        <pre class="guide-code"><code set:html={nestCode}></code></pre>
+        <p>Then inject the engine anywhere:</p>
+        <pre class="guide-code"><code set:html={nestServiceCode}></code></pre>
+        <p>
+          <code>forRootAsync</code> is available too, for building the engine from your
+          <code>ConfigService</code>. The module also stops the escalation scheduler on application
+          teardown.
+        </p>
+
+        <h2>Going to production with PostgreSQL</h2>
+        <p>
+          The <code>MemoryAdapter</code> is perfect for tests and demos. For production, swap in the
+          <code>PostgresAdapter</code> — the engine code doesn't change, only the adapter.
+        </p>
+        <pre class="guide-code"><code set:html={pgCode}></code></pre>
+
+        <h2>Where to go next</h2>
+        <ul class="guide-next">
+          <li><a href="/playground">Interactive playground</a> — build a chain and click through it.</li>
+          <li><a href="https://www.npmjs.com/package/hierarchical-approval" target="_blank" rel="noopener noreferrer">npm package</a> — install and read the full README.</li>
+          <li><a href="https://github.com/matthews-wong/hierarchical-approval" target="_blank" rel="noopener noreferrer">GitHub</a> — source, examples, and the enterprise plug-ins (audit, metrics, tracing, notify, resilience).</li>
+        </ul>
+
+        <div class="guide-cta">
+          <code>npm install hierarchical-approval</code>
+        </div>
+      </div>
+    </article>
+  </main>
+  <Footer />
+  <script type="application/ld+json" set:html={JSON.stringify(articleSchema)} />
+</Layout>
+
+<style>
+  .guide { padding-block: 3rem 5rem; }
+  .guide-container { max-width: 760px; }
+
+  .guide-breadcrumb { font-size: 0.8125rem; color: var(--text-2); margin-bottom: 2rem; }
+  .guide-breadcrumb a { color: var(--text-2); }
+  .guide-breadcrumb span[aria-hidden] { color: var(--text-3); margin-inline: 0.35rem; }
+  .guide-breadcrumb span[aria-current] { color: var(--text); }
+
+  .guide-head { margin-bottom: 2.5rem; }
+  .guide-title {
+    font-size: clamp(2rem, 4.5vw, 2.75rem);
+    letter-spacing: -0.03em;
+    line-height: 1.12;
+    margin-bottom: 1.25rem;
+  }
+  .guide-lede { font-size: 1.1875rem; color: var(--text-2); line-height: 1.7; }
+  .guide-meta {
+    margin-top: 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--text-3);
+    display: flex; gap: 0.6rem;
+  }
+
+  .guide h2 {
+    font-size: 1.5rem;
+    letter-spacing: -0.02em;
+    margin: 2.75rem 0 1rem;
+    padding-top: 0.5rem;
+  }
+  .guide p { margin-bottom: 1.15rem; color: var(--text); line-height: 1.75; }
+  .guide strong { font-weight: 600; }
+  .guide code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.12rem 0.4rem;
+    border-radius: 5px;
+  }
+
+  .guide-code {
+    background: #0d1117;
+    color: #e6edf3;
+    border-radius: var(--radius);
+    padding: 1.15rem 1.25rem;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    overflow-x: auto;
+    margin: 0 0 1.5rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .guide-code code { background: none; padding: 0; font-size: inherit; color: inherit; }
+  .guide-code :global(.c) { color: #8b949e; font-style: italic; }
+  .guide-code :global(.s) { color: #a5d6ff; }
+  .guide-code :global(.k) { color: #ff7b72; }
+  .guide-code :global(.n) { color: #79c0ff; }
+
+  .guide-tip {
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-mid);
+    border-radius: var(--radius);
+    padding: 0.875rem 1.15rem;
+    font-size: 0.9375rem;
+  }
+
+  .guide-next { margin: 0 0 2rem 1.1rem; }
+  .guide-next li { margin-bottom: 0.6rem; line-height: 1.6; }
+
+  .guide-cta {
+    background: var(--text);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 1rem 1.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    .guide-code { font-size: 0.72rem; }
+    .guide h2 { font-size: 1.3rem; }
+  }
+</style>
