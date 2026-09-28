@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "hierarchical-approval": "4.0.6",
     "typescript": "^5.9.3"
   }
 }
