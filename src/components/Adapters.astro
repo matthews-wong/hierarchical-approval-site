@@ -1,0 +1,286 @@
+---
+function hl(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(\/\/.*)/g, '<span class="c">$1</span>')
+    .replace(/(`(?:[^`\\]|\\.)*`)/g, '<span class="s">$1</span>')
+    .replace(/('(?:[^'\\]|\\.)*')/g, '<span class="s">$1</span>')
+    .replace(/\b(async|await|const|class|implements|if|return|new)\b/g, '<span class="k">$1</span>');
+}
+
+const adapters = [
+  {
+    name: 'INotificationAdapter',
+    purpose: 'Notify on every approval event',
+    example: 'Slack, email, push — fires after submit, approve, reject, escalate, and more.',
+    icon: `<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>`,
+    snippet: `class SlackNotifier implements INotificationAdapter {
+  async notify(event: NotificationEvent) {
+    // event.type, event.recipients, event.instanceId
+    if (event.type === 'approval:level_advanced') {
+      await slack.post(event.recipients, 'Approval needed');
+    }
+  }
+}`,
+    color: '#1d6fe4',
+    colorBg: '#eff6ff',
+  },
+  {
+    name: 'IAuditAdapter',
+    purpose: 'Write-once external audit sink',
+    example: 'Kafka, S3, CloudTrail — called in addition to the built-in audit log.',
+    icon: `<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>`,
+    snippet: `class KafkaAudit implements IAuditAdapter {
+  async append(tenantId, instanceId, entry, instance) {
+    await producer.send({
+      topic: 'approvals.audit',
+      messages: [{ value: JSON.stringify({
+        entry, version: instance.version
+      }) }],
+    });
+  }
+}`,
+    color: '#b45309',
+    colorBg: '#fef9ee',
+  },
+  {
+    name: 'IMetricsAdapter',
+    purpose: 'Prometheus / Datadog / OpenTelemetry',
+    example: '10 built-in metric names including approval.operation_duration_ms.',
+    icon: `<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,
+    snippet: `class PrometheusAdapter implements IMetricsAdapter {
+  increment(metric: MetricName, labels?: Record<string, string>) {
+    counters[metric].labels(labels ?? {}).inc();
+  }
+  timing(metric, durationMs, labels) {
+    histograms[metric].observe(durationMs / 1000);
+  }
+}`,
+    color: '#1a7a45',
+    colorBg: '#f0f9f4',
+  },
+  {
+    name: 'ISchedulerAdapter',
+    purpose: 'BullMQ, Temporal, EventBridge',
+    example: 'Replace the built-in setInterval escalation poll with a proper job queue.',
+    icon: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
+    snippet: `class BullMQScheduler implements ISchedulerAdapter {
+  async scheduleAt(id, runAt, callback) {
+    const job = await queue.add('tick', { id },
+      { delay: runAt.getTime() - Date.now() });
+    return job.id;
+  }
+  async cancel(handle) { await queue.remove(handle); }
+}`,
+    color: '#7c3aed',
+    colorBg: '#f5f3ff',
+  },
+  {
+    name: 'IAuthorizationPolicy',
+    purpose: 'Per-operation access control',
+    example: 'Signing authority caps, department restrictions, time-window gates.',
+    icon: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`,
+    snippet: `class SigningPolicy implements IAuthorizationPolicy {
+  async authorize(ctx: AuthorizationContext) {
+    if (ctx.operation === 'override') {
+      const cap = await budgetSystem.getSigningCap(ctx.actorId);
+      if (ctx.instance.data.amount > cap)
+        return 'Signing cap exceeded';
+    }
+    return undefined; // allow
+  }
+}`,
+    color: '#dc2626',
+    colorBg: '#fef2f2',
+  },
+  {
+    name: 'IOperationMiddleware',
+    purpose: 'Before / after / onError hooks',
+    example: 'OpenTelemetry tracing, audit enrichment, per-tenant quota enforcement.',
+    icon: `<rect x="2" y="2" width="20" height="5" rx="1"/><rect x="2" y="9" width="20" height="5" rx="1"/><rect x="2" y="16" width="20" height="5" rx="1"/>`,
+    snippet: `class TracingMiddleware implements IOperationMiddleware {
+  async before(ctx: OperationContext) {
+    const span = tracer.startSpan('approval.' + ctx.operation);
+    this.spans.set(ctx.instanceId, span);
+  }
+  async after(ctx, result) {
+    this.spans.get(ctx.instanceId)?.finish();
+  }
+}`,
+    color: '#0891b2',
+    colorBg: '#ecfeff',
+  },
+];
+
+const adapterCards = adapters.map(a => ({ ...a, html: hl(a.snippet) }));
+---
+
+<section class="section adapters" id="adapters" aria-labelledby="adapters-title">
+  <div class="container">
+    <span class="section-label">Extension ports</span>
+    <h2 class="section-title" id="adapters-title">Plug in. Don't fork.</h2>
+    <p class="section-sub">
+      Six typed interfaces let you wire the engine into your stack. All are fail-safe — a broken
+      Kafka connection will never prevent an approval from completing. Need them ready-made?
+      <a href="#plugins">Jump to the built-in plug-ins ↓</a>
+    </p>
+
+    <div class="adapter-grid">
+      {adapterCards.map((a) => (
+        <div class="adapter-card">
+          <div class="adapter-header">
+            <div class="adapter-icon" style={`background:${a.colorBg};color:${a.color}`} aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <Fragment set:html={a.icon} />
+              </svg>
+            </div>
+            <div>
+              <div class="adapter-name" style={`color:${a.color}`}>{a.name}</div>
+              <div class="adapter-purpose">{a.purpose}</div>
+            </div>
+          </div>
+          <p class="adapter-ex">{a.example}</p>
+          <div class="code-wrap">
+            <div class="code-header" aria-hidden="true">
+              <span class="code-dot" style={`background:${a.color}`}></span>
+              <span class="code-impl">implements {a.name}</span>
+            </div>
+            <pre class="code-pre"><code set:html={a.html}></code></pre>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .adapters {
+    background: var(--bg-alt);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .section-sub { margin-bottom: 3rem; }
+
+  .adapter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1rem;
+  }
+
+  .adapter-card {
+    background: white;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1.375rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    box-shadow: var(--shadow-xs);
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+
+  .adapter-card:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+  }
+
+  .adapter-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .adapter-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .adapter-name {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+  }
+
+  .adapter-purpose {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  .adapter-ex {
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    line-height: 1.55;
+  }
+
+  /* Dark code block */
+  .code-wrap {
+    background: #1c1c1e;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    background: #2c2c2e;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .code-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .code-impl {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: #8e8e93;
+    letter-spacing: 0.02em;
+  }
+
+  .code-pre {
+    padding: 0.875rem 1rem;
+    overflow-x: auto;
+    font-size: 0.72rem;
+    line-height: 1.7;
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a3c transparent;
+    color: #d1d5db;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .code-pre::-webkit-scrollbar { height: 3px; }
+  .code-pre::-webkit-scrollbar-track { background: transparent; }
+  .code-pre::-webkit-scrollbar-thumb { background: #3a3a3c; border-radius: 2px; }
+  .code-pre code { display: block; }
+  .code-pre :global(.k) { color: #c792ea; }
+  .code-pre :global(.s) { color: #fbbf24; }
+  .code-pre :global(.c) { color: #6b7280; font-style: italic; }
+
+  .code-wrap { position: relative; }
+
+  @media (max-width: 720px) {
+    .adapter-grid { grid-template-columns: 1fr; }
+    .code-pre {
+      font-size: 0.7rem;
+      padding: 0.75rem 0.875rem;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+  }
+</style>

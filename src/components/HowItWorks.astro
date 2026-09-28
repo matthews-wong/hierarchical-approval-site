@@ -1,0 +1,277 @@
+---
+function hl(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(\/\/.*)/g, '<span class="c">$1</span>')
+    .replace(/('(?:[^'\\]|\\.)*')/g, '<span class="s">$1</span>')
+    .replace(/\b(await|const|async|function|return|true|false|null|void|import|from|new)\b/g, '<span class="k">$1</span>')
+    .replace(/\b(engine|instance|ApprovalEngine|MemoryAdapter)\b/g, '<span class="v">$1</span>');
+}
+
+const steps = [
+  {
+    num: '01',
+    label: 'define-template.ts',
+    title: 'Define a template',
+    desc: 'Declare who approves, in what order, under what conditions. The template is snapshotted at submit time — you can update it without affecting in-flight instances.',
+    bullets: [
+      'Chain built fresh on every submit()',
+      'Conditions evaluated against document data',
+      'Works with any Zod schema you provide',
+    ],
+    code: hl(`const engine = new ApprovalEngine({
+  adapter: new MemoryAdapter(), // swap PostgresAdapter in prod
+});
+
+await engine.defineTemplate({
+  name: 'purchase-order',
+  documentType: 'purchase_order',
+  levels: [
+    { level: 1, name: 'Manager',
+      approvers: [{ type: 'user', userId: 'mgr-1' }],
+      mode: 'any' },
+  ],
+  conditions: [{
+    when: { field: 'amount', operator: '>', value: 10000 },
+    addLevels: [{
+      level: 2, name: 'Finance',
+      approvers: [{ type: 'role', role: 'finance-team' }],
+      mode: 'any',
+    }],
+  }],
+  slaDeadlineDays: 2,
+});`),
+  },
+  {
+    num: '02',
+    label: 'submit.ts',
+    title: 'Submit a document',
+    desc: 'Conditions are evaluated once at submit time. The engine builds the exact approval chain for this document. Submitting the same document twice returns the existing instance — idempotency built in.',
+    bullets: [
+      'Chain is immutable after submission',
+      'Duplicate submits return the same instance',
+      'Audit entry created automatically',
+    ],
+    code: hl(`const instance = await engine.submit({
+  templateName: 'purchase-order',
+  documentId: 'po-0042',
+  documentType: 'purchase_order',
+  submittedBy: 'alice',
+  data: { amount: 15000, vendor: 'Acme Corp' },
+});
+
+// instance.levels has two levels because amount > 10000
+// instance.status === 'pending'
+// instance.idempotencyKey prevents duplicates on retry`),
+  },
+  {
+    num: '03',
+    label: 'approve.ts',
+    title: 'Approvers act',
+    desc: 'Each approval advances the chain. The final approval marks the instance complete and emits the approval:completed event. Rejections, delegations, and SLA escalations are handled identically.',
+    bullets: [
+      'Optimistic locking on every write',
+      'CONFLICT thrown on concurrent approvals',
+      'Events fired after every state change',
+    ],
+    code: hl(`// Manager approves
+await engine.approve(instance.id, {
+  approverId: 'mgr-1',
+  comment: 'Looks good',
+});
+
+// Finance approves — instance status is now 'approved'
+await engine.approve(instance.id, { approverId: 'fin-1' });
+
+// Listen for completion
+engine.on('approval:completed', (inst) => {
+  console.log(inst.status); // 'approved'
+  console.log(inst.auditLog.length); // 4 entries
+});`),
+  },
+];
+---
+
+<section class="section hiw" id="how-it-works" aria-labelledby="hiw-title">
+  <div class="container">
+    <span class="section-label">How it works</span>
+    <h2 class="section-title" id="hiw-title">Three calls. Fully wired.</h2>
+    <p class="section-sub">
+      Locking, idempotency, SLA tracking, audit entries, and events happen automatically — no extra code.
+    </p>
+
+    <div class="steps">
+      {steps.map((step) => (
+        <div class="step">
+          <div class="step-left">
+            <span class="step-num" aria-hidden="true">{step.num}</span>
+            <h3 class="step-title">{step.title}</h3>
+            <p class="step-desc">{step.desc}</p>
+            <ul class="step-bullets">
+              {step.bullets.map(b => <li>{b}</li>)}
+            </ul>
+          </div>
+          <div class="code-wrap">
+            <div class="code-header" aria-hidden="true">
+              <div class="win-dots">
+                <span></span><span></span><span></span>
+              </div>
+              <span class="file-label">{step.label}</span>
+            </div>
+            <pre class="code-pre"><code set:html={step.code}></code></pre>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .hiw {
+    background: var(--bg);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .section-sub { margin-bottom: 4rem; }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 4.5rem;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 3.5rem;
+    align-items: start;
+  }
+
+  .step-left { padding-top: 0.25rem; }
+
+  .step-num {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+  }
+
+  .step-title {
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.75rem;
+    line-height: 1.2;
+  }
+
+  .step-desc {
+    font-size: 0.9375rem;
+    color: var(--text-2);
+    line-height: 1.7;
+    margin-bottom: 1rem;
+  }
+
+  .step-bullets {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .step-bullets li {
+    font-size: 0.8375rem;
+    color: var(--text-3);
+    padding-left: 1.125rem;
+    position: relative;
+    line-height: 1.5;
+  }
+
+  .step-bullets li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Dark code block */
+  .code-wrap {
+    background: #1c1c1e;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem 1rem;
+    background: #2c2c2e;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .win-dots {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .win-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .win-dots span:nth-child(1) { background: #ff5f57; }
+  .win-dots span:nth-child(2) { background: #febc2e; }
+  .win-dots span:nth-child(3) { background: #28c840; }
+
+  .file-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: #8e8e93;
+  }
+
+  .code-pre {
+    padding: 1.375rem 1.5rem;
+    overflow-x: auto;
+    font-size: 0.8125rem;
+    line-height: 1.75;
+    scrollbar-width: thin;
+    scrollbar-color: #444 transparent;
+    color: #d1d5db;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .code-pre::-webkit-scrollbar { height: 3px; }
+  .code-pre::-webkit-scrollbar-track { background: transparent; }
+  .code-pre::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+
+  .code-pre code { display: block; }
+  .code-pre :global(.k) { color: #c792ea; }
+  .code-pre :global(.s) { color: #fbbf24; }
+  .code-pre :global(.v) { color: #82aaff; }
+  .code-pre :global(.c) { color: #6b7280; font-style: italic; }
+
+  @media (max-width: 860px) {
+    .step { grid-template-columns: 1fr; gap: 1.5rem; }
+  }
+
+  @media (max-width: 768px) {
+    .code-pre {
+      max-height: 220px;
+      overflow-y: auto;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .code-pre { padding: 1rem 1.125rem; font-size: 0.75rem; }
+  }
+</style>

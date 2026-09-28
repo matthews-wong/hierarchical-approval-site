@@ -1,0 +1,153 @@
+---
+const rows = [
+  { label: 'TypeScript-first',        ha: true,  af: false, we: false,     hr: false   },
+  { label: 'Multi-tenancy',           ha: true,  af: false, we: false,     hr: false   },
+  { label: 'Optimistic locking',      ha: true,  af: false, we: false,     hr: 'maybe' },
+  { label: 'Idempotency',             ha: true,  af: false, we: false,     hr: false   },
+  { label: 'Immutable audit trail',   ha: true,  af: false, we: false,     hr: false   },
+  { label: 'SLA tracking',            ha: true,  af: false, we: false,     hr: false   },
+  { label: 'Conditional chains',      ha: true,  af: false, we: 'partial', hr: 'maybe' },
+  { label: 'Escalation + delegation', ha: true,  af: false, we: false,     hr: false   },
+  { label: 'Test utilities',          ha: true,  af: false, we: false,     hr: false   },
+  { label: 'Actively maintained',     ha: true,  af: false, we: 'partial', hr: true    },
+  { label: 'Zero config to start',   ha: 'partial', af: true, we: false,  hr: true    },
+];
+
+function icon(val: boolean | string) {
+  if (val === true)      return '<span class="yes" aria-label="Yes">✓</span>';
+  if (val === false)     return '<span class="no" aria-label="No">—</span>';
+  if (val === 'partial') return '<span class="partial" aria-label="Partial">~</span>';
+  if (val === 'maybe')   return '<span class="partial" aria-label="Depends">?</span>';
+  return '';
+}
+---
+
+<section class="section cmp" id="comparison" aria-labelledby="cmp-title">
+  <div class="container">
+    <span class="section-label">Alternatives</span>
+    <h2 class="section-title" id="cmp-title">Why not just use…</h2>
+    <p class="section-sub">
+      <strong>approval-flow</strong> is single-level only; last published 2020.
+      <strong>workflow-engine</strong> is a generic state machine — you implement every guard and audit entry yourself.
+      <strong>Hand-rolled</strong> will eventually hit the concurrent-approval race condition. This library has 380 tests covering it.
+      One honest trade-off: hand-rolling a single if/else is simpler to start — this library requires a <code>defineTemplate</code> call.
+    </p>
+
+    <div class="table-wrap">
+      <table class="cmp-table" aria-label="Feature comparison">
+        <thead>
+          <tr>
+            <th scope="col" class="feature-col">Feature</th>
+            <th scope="col" class="hl-col"><span class="col-ha">hierarchical-approval</span></th>
+            <th scope="col"><span class="col-other">approval-flow</span></th>
+            <th scope="col"><span class="col-other">workflow-engine</span></th>
+            <th scope="col"><span class="col-other">hand-rolled</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr>
+              <td class="feature-label">{r.label}</td>
+              <td class="hl-col"><Fragment set:html={icon(r.ha)} /></td>
+              <td><Fragment set:html={icon(r.af)} /></td>
+              <td><Fragment set:html={icon(r.we)} /></td>
+              <td><Fragment set:html={icon(r.hr)} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cmp {
+    background: var(--bg-alt);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .section-sub {
+    margin-bottom: 2.5rem;
+  }
+
+  .section-sub strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .section-sub code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 0.1em 0.375em;
+    border-radius: 4px;
+    color: var(--text);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .cmp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    background: white;
+  }
+
+  th, td {
+    padding: 0.75rem 1.25rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  thead th {
+    background: var(--bg-alt);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-2);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .feature-col, .feature-label {
+    text-align: left;
+    white-space: nowrap;
+    min-width: 160px;
+  }
+
+  .feature-label {
+    color: var(--text-2);
+    font-size: 0.875rem;
+  }
+
+  .col-ha {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .col-other {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-3);
+  }
+
+  .hl-col {
+    background: var(--accent-bg);
+    border-left: 2px solid var(--accent-mid);
+    border-right: 2px solid var(--accent-mid);
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: #fafafa; }
+  tbody tr:hover td.hl-col { background: #e8f5ee; }
+
+  :global(.yes)     { color: var(--accent); font-weight: 700; }
+  :global(.no)      { color: var(--text-3); }
+  :global(.partial) { color: var(--amber); }
+</style>

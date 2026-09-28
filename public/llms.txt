@@ -1,0 +1,101 @@
+# hierarchical-approval
+
+> TypeScript-first multi-level approval workflow engine for ERP systems. Multi-tenant, audit-ready, fully pluggable.
+
+## What this library does
+
+`hierarchical-approval` solves multi-level approval chains for enterprise applications without requiring BPMN, external orchestrators, or bespoke hand-rolled logic. It handles:
+
+- Sequential and parallel approval chains with configurable modes (any / all / majority)
+- Conditional routing: levels activate or skip based on document data at submit time
+- Optimistic locking with retry policies to prevent concurrent-approval race conditions
+- Built-in idempotency: submitting the same document twice returns the existing instance
+- Immutable audit trail with old/new state diff on every mutation
+- SLA deadline tracking with automatic `approval:sla_breached` events
+- Escalation: automatic and manual escalation with delegation and time-limited proxying
+- Override: bypass remaining levels (when `allowOverride: true` in the template)
+- Multi-tenancy: every adapter call is scoped by `tenantId`
+- ApprovalTestKit + ManualClock for deterministic, zero-I/O test suites
+
+## Installation
+
+```
+npm install hierarchical-approval
+# peer dep for Postgres only:
+npm install pg @types/pg
+```
+
+## Supported storage adapters
+
+- `MemoryAdapter` — in-process, ideal for development and tests
+- `PostgresAdapter` — production-grade, call `.migrate()` once to set up schema
+
+## Pluggable enterprise adapters
+
+Six adapter interfaces for extending behaviour without modifying library code:
+
+- `INotificationAdapter` — send notifications on every approval event
+- `IAuditAdapter` — write audit entries to an external WORM sink (Kafka, S3, CloudTrail)
+- `IMetricsAdapter` — Prometheus / Datadog / OpenTelemetry counters and timings
+- `ISchedulerAdapter` — replace built-in `setInterval` with BullMQ, Temporal, or EventBridge
+- `IAuthorizationPolicy` — per-operation access control (e.g. signing authority caps)
+- `IOperationMiddleware` — before / after / onError hooks for tracing, logging, quota enforcement
+
+## Built-in enterprise plug-ins (new in 0.3)
+
+Production-grade implementations of the adapter ports above, each on its own tree-shakeable
+import subpath with zero runtime dependencies:
+
+- `hierarchical-approval/plugins/audit` — `HashChainAuditAdapter` (SHA-256 tamper-evident chain with `verify()` detecting edits, deletions, reordering, and tail truncation), `RedactingAuditAdapter` (PII redaction, originals never mutated), `CompositeAuditAdapter` (fault-isolated fan-out)
+- `hierarchical-approval/plugins/metrics` — `PrometheusMetricsAdapter` (`scrape()` exposition format), `InMemoryMetricsAdapter` (`snapshot()` with p50/p95), `CompositeMetricsAdapter`
+- `hierarchical-approval/plugins/resilience` — `RbacAuthorizationPolicy` (per-operation roles, default-deny), `CompositeAuthorizationPolicy` (AND/OR), `RateLimitMiddleware` (token bucket), `LoggingMiddleware`
+- `hierarchical-approval/plugins/notify` — `OutboxNotificationAdapter` (retry + exponential backoff + dead-letter, at-least-once), `TemplatedNotificationAdapter`, `CompositeNotificationAdapter`
+
+## Approver types
+
+- `{ type: 'user', userId: 'alice' }` — specific user ID
+- `{ type: 'role', role: 'finance-team' }` — resolved via `orgProvider.getUsersByRole()`
+- `{ type: 'dynamic', resolver: 'direct-manager' }` — resolved via registered resolver function
+- Custom types via `engine.registerApproverType()`
+
+## Core API
+
+- `engine.defineTemplate(config)` — define a reusable approval chain
+- `engine.submit(opts)` — create an approval instance for a document
+- `engine.approve(instanceId, opts)` — approve the current level
+- `engine.reject(instanceId, opts)` — reject with optional return-to-previous
+- `engine.delegate(instanceId, opts)` — delegate approval to another user
+- `engine.escalate(instanceId, opts)` — escalate to the configured escalation approver
+- `engine.cancel(instanceId, opts)` — cancel an in-flight instance
+- `engine.resubmit(instanceId, opts)` — create a new instance linked to a rejected one
+- `engine.override(instanceId, opts)` — bypass remaining levels
+- `engine.bulkApprove(ids, opts)` — batch approve up to 200 instances
+
+## Events emitted
+
+`approval:submitted`, `approval:approved`, `approval:rejected`, `approval:level_advanced`,
+`approval:delegated`, `approval:escalated`, `approval:cancelled`, `approval:expired`,
+`approval:overridden`, `approval:resubmitted`, `approval:sla_breached`, `approval:completed`
+
+## Author
+
+Matthews Wong — https://www.matthewswong.com
+
+## Documentation
+
+https://hierarchical-approval.matthewswong.com
+
+## npm
+
+https://www.npmjs.com/package/hierarchical-approval
+
+## Blog posts
+
+- I Built an npm Library for ERP Hierarchical Approval Workflows: https://www.matthewswong.com/en/blog/hierarchical-approval-npm-library
+- Accounts Payable Multi-Level Approval Workflow in NestJS: https://www.matthewswong.com/en/blog/accounts-payable-multi-approval-nestjs
+- ERP HR Leave Approval Flow: https://www.matthewswong.com/en/blog/erp-hr-leave-approval-flow
+- ERP Approval Matrix Configuration: https://www.matthewswong.com/en/blog/erp-approval-matrix-configuration
+
+## License
+
+MIT

@@ -1,0 +1,717 @@
+---
+import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
+
+function hl(raw) {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(\/\/[^\n]*)/g, '<span class="c">$1</span>')
+    .replace(/('[^'\\]*(?:\\.[^'\\]*)*')/g, '<span class="s">$1</span>')
+    .replace(/("[^"\\]*(?:\\.[^"\\]*)*")/g, '<span class="s">$1</span>')
+    .replace(/\b(async|await|const|let|if|else|return|new|import|from|export|true|false)\b/g, '<span class="k">$1</span>')
+    .replace(/\b([0-9][0-9_]*(?:\.[0-9]+)?)\b/g, '<span class="n">$1</span>');
+}
+
+const configCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
+import { PostgresAdapter } from 'hierarchical-approval/adapters';
+import { z } from 'zod';
+
+const engine = new ApprovalEngine({
+  storage: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+});
+
+const InvoiceSchema = z.object({
+  invoiceNumber: z.string(),
+  vendorId: z.string(),
+  amount: z.number().positive(),
+  currency: z.string().default('USD'),
+  departmentId: z.string(),
+});
+
+engine.defineTemplate({
+  name: 'accounts-payable',
+  schema: InvoiceSchema,
+  buildChain: async (data, tenantId) => {
+    const levels = [];
+
+    // Level 1: Department head always required
+    const deptHead = await db.query(
+      'SELECT user_id FROM dept_heads WHERE dept_id = $1 AND tenant_id = $2',
+      [data.departmentId, tenantId]
+    );
+    levels.push({
+      levelOrder: 1,
+      approvers: [{ approverType: 'user', value: deptHead.rows[0].user_id }],
+      slaHours: 48,
+    });
+
+    // Level 2: Finance manager for invoices over $1,000
+    if (data.amount > 1_000) {
+      levels.push({
+        levelOrder: 2,
+        approvers: [{ approverType: 'role', value: 'finance-manager' }],
+        slaHours: 72,
+      });
+    }
+
+    // Level 3: CFO for invoices over $10,000
+    if (data.amount > 10_000) {
+      levels.push({
+        levelOrder: 3,
+        approvers: [{ approverType: 'role', value: 'cfo' }],
+        slaHours: 96,
+      });
+    }
+
+    // Level 4: Board approval for invoices over $50,000
+    if (data.amount > 50_000) {
+      levels.push({
+        levelOrder: 4,
+        approvers: [
+          { approverType: 'role', value: 'board-chair' },
+          { approverType: 'role', value: 'board-member' },
+        ],
+        requireAll: false, // Any board member can approve
+        slaHours: 168,
+      });
+    }
+
+    return { levels, mode: 'sequential' };
+  },
+});`);
+
+const submitCode = hl(`// Submit an invoice for approval
+const instance = await engine.submit({
+  tenantId: 'acme-corp',
+  templateName: 'accounts-payable',
+  submittedBy: 'emp-4821',
+  data: {
+    invoiceNumber: 'INV-2847',
+    vendorId: 'vendor-99',
+    amount: 15_000,
+    currency: 'USD',
+    departmentId: 'dept-engineering',
+  },
+});
+
+// instance.status === 'pending'
+// instance.currentLevel === 1  (awaiting dept head)
+console.log(instance.id); // 'ap-instance-uuid'`);
+
+const approveCode = hl(`// Dept head approves (level 1)
+await engine.approve({
+  tenantId: 'acme-corp',
+  instanceId: instance.id,
+  actorId: 'user-dept-head-42',
+  comment: 'Approved - valid vendor contract',
+});
+
+// instance now advances to level 2 (Finance Manager)
+// INotificationAdapter fires: approval:level_advanced
+
+// Finance manager approves (level 2)
+await engine.approve({
+  tenantId: 'acme-corp',
+  instanceId: instance.id,
+  actorId: 'user-finance-mgr',
+  comment: 'Within Q3 budget',
+});
+
+// CFO is now notified (level 3)...`);
+
+const raceCode = hl(`// Two approvers at the same level try to approve simultaneously.
+// The library uses optimistic locking — second write loses cleanly.
+
+try {
+  await engine.approve({ tenantId, instanceId, actorId: 'approver-a' });
+} catch (err) {
+  if (err.code === 'CONFLICT') {
+    // Another approver already advanced this level.
+    // Re-fetch the instance to see the current state.
+    const current = await engine.getInstance({ tenantId, instanceId });
+    console.log('Current level:', current.currentLevel);
+  }
+}`);
+
+const slaCode = hl(`// Wire a real job scheduler for SLA escalation (instead of polling)
+import { BullMQScheduler } from './adapters/bullmq-scheduler';
+
+const engine = new ApprovalEngine({
+  storage: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  scheduler: new BullMQScheduler({ redis: redisConnection }),
+  // The engine calls scheduler.scheduleAt(id, deadline, callback)
+  // BullMQ fires the callback at the right time — no polling needed
+});`);
+
+const delegateCode = hl(`// Dept head going on leave: delegate approval rights before leaving
+await engine.delegate({
+  tenantId: 'acme-corp',
+  fromActorId: 'user-dept-head-42',
+  toActorId: 'user-backup-head',
+  validUntil: new Date('2025-08-15'),
+});
+
+// Future engine.approve() calls from 'user-backup-head'
+// are accepted for any instance where 'user-dept-head-42' is an approver.
+// Audit trail records: "approved by user-backup-head on behalf of user-dept-head-42"`);
+---
+
+<UseCaseLayout
+  title="Accounts Payable Approval"
+  description="Multi-level invoice approval chains that auto-scale with transaction amount. Built for AP teams that need a clean audit trail and concurrent-safe approvals."
+  tag="Finance & ERP"
+>
+  <!-- Page hero -->
+  <section class="uc-hero">
+    <div class="container">
+      <div class="uc-tag-row">
+        <span class="uc-tag">Finance &amp; ERP</span>
+        <span class="uc-badge">accounts-payable</span>
+      </div>
+      <h1 class="uc-title">Accounts Payable Approval</h1>
+      <p class="uc-sub">
+        Multi-level invoice approval chains that auto-scale with transaction amount.
+        Under $1k needs one sign-off; over $50k routes to the board.
+        All built at submission time — no manual chain wiring required.
+      </p>
+    </div>
+  </section>
+
+  <!-- Chain diagram -->
+  <section class="chain-section">
+    <div class="container">
+      <div class="section-label-sm">Approval chain</div>
+      <div class="chain-flow" role="img" aria-label="Approval chain: Dept Head always, Finance if over $1k, CFO if over $10k, Board if over $50k">
+        <div class="cf-node cf-always">
+          <span class="cf-name">Dept Head</span>
+          <span class="cf-badge cf-always-badge">always</span>
+        </div>
+        <div class="cf-arrow" aria-hidden="true">→</div>
+        <div class="cf-node cf-cond">
+          <span class="cf-cond-label">if &gt; $1k</span>
+          <span class="cf-name">Finance Mgr</span>
+          <span class="cf-badge cf-cond-badge">conditional</span>
+        </div>
+        <div class="cf-arrow" aria-hidden="true">→</div>
+        <div class="cf-node cf-cond">
+          <span class="cf-cond-label">if &gt; $10k</span>
+          <span class="cf-name">CFO</span>
+          <span class="cf-badge cf-cond-badge">conditional</span>
+        </div>
+        <div class="cf-arrow" aria-hidden="true">→</div>
+        <div class="cf-node cf-cond">
+          <span class="cf-cond-label">if &gt; $50k</span>
+          <span class="cf-name">Board</span>
+          <span class="cf-badge cf-cond-badge">any member</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Configuration -->
+  <section class="code-section">
+    <div class="container code-grid">
+      <div class="code-meta">
+        <span class="section-label-sm">Step 1</span>
+        <h2 class="code-heading">Define the template</h2>
+        <p class="code-desc">
+          <code>buildChain</code> runs at submission time. It receives the invoice data
+          and <code>tenantId</code>, queries your DB for the right approver, and returns
+          the level array. The chain is immutable after submission.
+        </p>
+        <ul class="code-bullets">
+          <li>Chain built fresh on every <code>engine.submit()</code></li>
+          <li>Amount thresholds add levels dynamically</li>
+          <li>Board level uses <code>requireAll: false</code> — any board member approves</li>
+          <li><code>slaHours</code> triggers escalation if not acted upon</li>
+        </ul>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-dots"><span></span><span></span><span></span></span>
+          <span class="code-filename">ap-template.ts</span>
+        </div>
+        <pre class="code-pre"><code><Fragment set:html={configCode} /></code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Submit + Approve -->
+  <section class="code-section bg-alt-section">
+    <div class="container code-grid reverse">
+      <div class="code-meta">
+        <span class="section-label-sm">Step 2 &amp; 3</span>
+        <h2 class="code-heading">Submit and approve</h2>
+        <p class="code-desc">
+          <code>engine.submit()</code> builds the chain and creates the instance.
+          Each <code>engine.approve()</code> advances to the next level and fires
+          your <code>INotificationAdapter</code>.
+        </p>
+        <ul class="code-bullets">
+          <li>Instance stores full audit trail from the start</li>
+          <li>Each approval recorded with actor, timestamp, comment</li>
+          <li>Final approval sets <code>status: approved</code> automatically</li>
+        </ul>
+      </div>
+      <div>
+        <div class="code-block" style="margin-bottom:0.75rem">
+          <div class="code-header">
+            <span class="code-dots"><span></span><span></span><span></span></span>
+            <span class="code-filename">submit.ts</span>
+          </div>
+          <pre class="code-pre"><code><Fragment set:html={submitCode} /></code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-dots"><span></span><span></span><span></span></span>
+            <span class="code-filename">approve.ts</span>
+          </div>
+          <pre class="code-pre"><code><Fragment set:html={approveCode} /></code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Edge cases -->
+  <section class="edges-section">
+    <div class="container">
+      <span class="section-label">Edge cases</span>
+      <h2 class="section-title">The cases you will hit in production.</h2>
+      <p class="section-sub">Three scenarios that bring down hand-rolled implementations — all handled by the library.</p>
+
+      <div class="edges-grid">
+        <div class="edge-card">
+          <div class="edge-num">01</div>
+          <h3 class="edge-title">Concurrent approval race condition</h3>
+          <p class="edge-desc">
+            Two managers in the same approval pool both click "Approve" within milliseconds.
+            Without optimistic locking, both writes succeed — corrupting the workflow state.
+          </p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-dots"><span></span><span></span><span></span></span>
+              <span class="code-filename">handle-conflict.ts</span>
+            </div>
+            <pre class="code-pre"><code><Fragment set:html={raceCode} /></code></pre>
+          </div>
+          <p class="edge-note">
+            The library increments a <code>version</code> field on every write.
+            A conflicting write throws <code>CONFLICT</code> — the caller re-fetches and retries if needed.
+          </p>
+        </div>
+
+        <div class="edge-card">
+          <div class="edge-num">02</div>
+          <h3 class="edge-title">SLA breach escalation</h3>
+          <p class="edge-desc">
+            When <code>slaHours</code> elapses with no action, the engine auto-escalates.
+            The default poll interval works for dev; production needs a real job scheduler.
+          </p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-dots"><span></span><span></span><span></span></span>
+              <span class="code-filename">scheduler.ts</span>
+            </div>
+            <pre class="code-pre"><code><Fragment set:html={slaCode} /></code></pre>
+          </div>
+          <p class="edge-note">
+            <code>ISchedulerAdapter</code> receives a deadline and a callback.
+            Wire BullMQ, Temporal, or EventBridge — whatever your stack already uses.
+          </p>
+        </div>
+
+        <div class="edge-card">
+          <div class="edge-num">03</div>
+          <h3 class="edge-title">Approver on leave — delegation</h3>
+          <p class="edge-desc">
+            The department head is on vacation. Without delegation, every invoice submitted
+            during that period will breach SLA and escalate.
+          </p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-dots"><span></span><span></span><span></span></span>
+              <span class="code-filename">delegate.ts</span>
+            </div>
+            <pre class="code-pre"><code><Fragment set:html={delegateCode} /></code></pre>
+          </div>
+          <p class="edge-note">
+            Delegation is time-scoped. The audit trail records who acted on whose behalf,
+            keeping compliance records accurate.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Related use cases -->
+  <section class="related-section">
+    <div class="container">
+      <h2 class="related-title">Related use cases</h2>
+      <div class="related-grid">
+        <a href="/use-cases/expense-reports/" class="related-card">
+          <span class="related-tag">Finance & HR</span>
+          <span class="related-name">Expense Reimbursement →</span>
+        </a>
+        <a href="/use-cases/purchase-orders/" class="related-card">
+          <span class="related-tag">Procurement</span>
+          <span class="related-name">Purchase Order Routing →</span>
+        </a>
+        <a href="/use-cases/contract-signing/" class="related-card">
+          <span class="related-tag">Legal</span>
+          <span class="related-name">Contract Signing →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+</UseCaseLayout>
+
+<style>
+  /* ── Hero ── */
+  .uc-hero {
+    padding-block: 3.5rem 2.5rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .uc-tag-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .uc-tag {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #1d6fe4;
+  }
+
+  .uc-badge {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border-light);
+    color: var(--text-3);
+    padding: 0.175rem 0.5rem;
+    border-radius: 4px;
+  }
+
+  .uc-title {
+    font-size: clamp(1.75rem, 3.5vw, 2.75rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+  }
+
+  .uc-sub {
+    font-size: 1.0625rem;
+    color: var(--text-2);
+    line-height: 1.65;
+    max-width: 58ch;
+  }
+
+  /* ── Chain diagram ── */
+  .chain-section {
+    padding-block: 2.5rem;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .section-label-sm {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 1rem;
+  }
+
+  .chain-flow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .cf-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    min-width: 90px;
+    border: 1.5px solid var(--border);
+    background: white;
+  }
+
+  .cf-always { border-color: var(--accent); background: var(--accent-bg); }
+  .cf-cond   { border-color: var(--border-light); background: white; }
+
+  .cf-cond-label {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+  }
+
+  .cf-name { font-size: 0.8125rem; font-weight: 600; color: var(--text); }
+
+  .cf-badge {
+    font-family: var(--font-mono);
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+  }
+
+  .cf-always-badge { background: var(--accent-bg); color: var(--accent); }
+  .cf-cond-badge   { background: var(--bg-alt); color: var(--text-3); }
+
+  .cf-arrow { color: var(--border); font-size: 1.25rem; }
+
+  /* ── Code sections ── */
+  .code-section { padding-block: 4rem; background: var(--bg); border-top: 1px solid var(--border-light); }
+  .bg-alt-section { background: var(--bg-alt); }
+
+  .code-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 3rem;
+    align-items: start;
+  }
+
+  .code-grid.reverse { grid-template-columns: 1fr 280px; }
+  .code-grid.reverse .code-meta { order: 2; }
+  .code-grid.reverse > div:first-child { order: 1; }
+
+  .code-heading {
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .code-desc {
+    font-size: 0.875rem;
+    color: var(--text-2);
+    line-height: 1.65;
+    margin-bottom: 1rem;
+  }
+
+  .code-desc code, .edge-note code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--bg-alt);
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    color: var(--text);
+  }
+
+  .code-bullets {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .code-bullets li {
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    padding-left: 1.25rem;
+    position: relative;
+    line-height: 1.5;
+  }
+
+  .code-bullets li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .code-bullets code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--bg-alt);
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    color: var(--text);
+  }
+
+  /* Code block */
+  .code-block {
+    background: #1c1c1e;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid #3a3a3c;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    background: #2c2c2e;
+    border-bottom: 1px solid #3a3a3c;
+  }
+
+  .code-dots {
+    display: flex;
+    gap: 0.3rem;
+  }
+
+  .code-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #3a3a3c;
+  }
+
+  .code-dots span:nth-child(1) { background: #ff5f57; }
+  .code-dots span:nth-child(2) { background: #febc2e; }
+  .code-dots span:nth-child(3) { background: #28c840; }
+
+  .code-filename {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: #8e8e93;
+  }
+
+  .code-pre {
+    padding: 1rem 1.125rem;
+    overflow-x: auto;
+    font-size: 0.75rem;
+    line-height: 1.7;
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a3c transparent;
+    color: #e6edf3;
+  }
+
+  .code-pre :global(.k) { color: #ff7b72; }
+  .code-pre :global(.s) { color: #a5d6ff; }
+  .code-pre :global(.c) { color: #8b949e; font-style: italic; }
+  .code-pre :global(.n) { color: #79c0ff; }
+
+  /* ── Edge cases ── */
+  .edges-section {
+    padding-block: 5rem;
+    background: var(--bg-alt);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .section-sub { margin-bottom: 3rem; }
+
+  .edges-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .edge-card {
+    background: white;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .edge-num {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+
+  .edge-title {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  .edge-desc {
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  .edge-note {
+    font-size: 0.7875rem;
+    color: var(--text-3);
+    line-height: 1.55;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-light);
+  }
+
+  /* ── Related ── */
+  .related-section {
+    padding-block: 3.5rem;
+    background: var(--bg);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .related-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    letter-spacing: -0.01em;
+  }
+
+  .related-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .related-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+
+  .related-card:hover { background: white; text-decoration: none; }
+
+  .related-tag {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-3);
+  }
+
+  .related-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  @media (max-width: 860px) {
+    .code-grid, .code-grid.reverse { grid-template-columns: 1fr; }
+    .code-grid.reverse .code-meta { order: 0; }
+    .edges-grid { grid-template-columns: 1fr; }
+    .related-grid { grid-template-columns: 1fr; }
+  }
+</style>

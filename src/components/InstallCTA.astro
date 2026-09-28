@@ -1,0 +1,170 @@
+---
+---
+
+<section class="cta-section" id="install" aria-labelledby="cta-title">
+  <div class="container">
+    <div class="cta-inner">
+      <span class="section-label">Get started</span>
+      <h2 class="cta-title" id="cta-title">
+        Your next approval workflow<br />ships faster than the last one.
+      </h2>
+      <p class="cta-sub">
+        Drop it into any Node.js project. No database required for local development.
+      </p>
+
+      <div class="install-block-wrap">
+        <div class="install-block">
+          <pre><code><span class="dim">$</span> npm install hierarchical-approval</code></pre>
+          <button class="copy-btn" data-copy="npm install hierarchical-approval" aria-label="Copy npm install command">
+            <svg class="icon-copy" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <svg class="icon-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </button>
+        </div>
+        <p class="peer-note">Peer dep for Postgres: <code>npm install pg @types/pg</code></p>
+      </div>
+
+      <div class="cta-links">
+        <a href="https://www.npmjs.com/package/hierarchical-approval" class="cta-btn primary" target="_blank" rel="noopener noreferrer">
+          View on npm
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </a>
+        <a href="https://github.com/matthews-wong/hierarchical-approval" class="cta-btn secondary" target="_blank" rel="noopener noreferrer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+          </svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.getAttribute('data-copy') ?? '');
+        btn.classList.add('copied');
+        setTimeout(() => btn.classList.remove('copied'), 2000);
+      } catch {}
+    });
+  });
+</script>
+
+<style>
+  .cta-section {
+    border-top: 1px solid var(--border-light);
+    padding-block: 7rem;
+    background: var(--bg);
+  }
+
+  .cta-inner {
+    max-width: 580px;
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .cta-title {
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+  }
+
+  .cta-sub {
+    color: var(--text-2);
+    margin-bottom: 2.5rem;
+    font-size: 1.0625rem;
+  }
+
+  .install-block-wrap {
+    margin-bottom: 2rem;
+  }
+
+  .install-block {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+  }
+
+  .install-block pre {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    background: none;
+    border: none;
+    font-family: var(--font-mono);
+  }
+
+  .install-block pre code { color: var(--text); }
+  .dim { color: var(--text-3); margin-right: 0.5rem; }
+
+  .copy-btn {
+    height: 100%;
+    padding: 0.75rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--border);
+    color: var(--text-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .copy-btn .icon-check { display: none; }
+  .copy-btn.copied .icon-copy { display: none; }
+  .copy-btn.copied .icon-check { display: block; }
+  .copy-btn:hover { color: var(--accent); background: var(--accent-bg); }
+  .copy-btn.copied { color: var(--accent); background: var(--accent-bg); border-left-color: var(--accent-mid); }
+
+  .peer-note {
+    font-size: 0.8125rem;
+    color: var(--text-3);
+  }
+
+  .peer-note code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--text-2);
+  }
+
+  .cta-links {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6875rem 1.375rem;
+    border-radius: 980px;
+    font-weight: 500;
+    font-size: 0.9375rem;
+    text-decoration: none;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+
+  .cta-btn:hover {
+    opacity: 0.8;
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
+
+  .primary { background: var(--text); color: white; }
+  .secondary { background: var(--bg-alt); color: var(--text); border: 1px solid var(--border); }
+</style>

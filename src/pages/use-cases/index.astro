@@ -1,0 +1,323 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+
+const cases = [
+  {
+    tag: 'Finance & ERP',
+    tagColor: '#1d6fe4',
+    tagBg: '#eff6ff',
+    title: 'Accounts Payable Approval',
+    desc: 'Auto-build 1–4 level chains from invoice amount. Under $1k needs one approver; over $50k routes to the board. Handles concurrent race conditions with optimistic locking.',
+    edgeCases: ['Concurrent approvals race condition', 'SLA breach escalation', 'Department head delegation'],
+    href: '/use-cases/accounts-payable/',
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`,
+  },
+  {
+    tag: 'HR Systems',
+    tagColor: '#7c3aed',
+    tagBg: '#f5f3ff',
+    title: 'HR Leave Request Workflows',
+    desc: 'Type-aware approval chains. Annual leave routes through manager and HR. Emergency leave auto-approves with post-hoc HR notification. Extended leave adds department head.',
+    edgeCases: ['Manager on leave — auto-delegation', 'Overlapping team quota check', 'Same-day emergency auto-approve'],
+    href: '/use-cases/hr-leave/',
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  },
+  {
+    tag: 'Procurement',
+    tagColor: '#b45309',
+    tagBg: '#fef9ee',
+    title: 'Purchase Order Routing',
+    desc: 'IT, Operations, and Marketing procurement each follow different chain templates. Enterprise software requires Security sign-off. Finance added for all POs over $10k.',
+    edgeCases: ['Split PO detection before submission', 'Partial line-item rejection', 'Emergency bypass with audit trail'],
+    href: '/use-cases/purchase-orders/',
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
+  },
+  {
+    tag: 'Finance & HR',
+    tagColor: '#0891b2',
+    tagBg: '#ecfeff',
+    title: 'Employee Expense Reimbursement',
+    desc: 'Auto-approve small expenses after manager sign-off. Large or international expenses get Finance and Compliance review. Foreign currency locked at submission time.',
+    edgeCases: ['Duplicate expense detection', 'Foreign currency lock-in', 'Receipt validation before submission'],
+    href: '/use-cases/expense-reports/',
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,
+  },
+  {
+    tag: 'Legal',
+    tagColor: '#1a7a45',
+    tagBg: '#f0f9f4',
+    title: 'Contract Approval Pipeline',
+    desc: 'Legal review before every contract execution. High-value contracts add Finance and board levels. Amendments to approved contracts automatically restart the chain with the new value.',
+    edgeCases: ['Amendments restart the chain', 'External counter-signature webhook', 'Legal hold mid-approval'],
+    href: '/use-cases/contract-signing/',
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
+  },
+  {
+    tag: 'SaaS Architecture',
+    tagColor: '#dc2626',
+    tagBg: '#fef2f2',
+    title: 'Per-Tenant Approval Rules',
+    desc: 'Each tenant configures their own approval chain via your admin UI. Basic tenants get a simple template; Enterprise tenants store custom chains in your database.',
+    edgeCases: ['Tenant suspended mid-approval', 'Chain misconfiguration validation', 'Cross-tenant partner approvals'],
+    href: '/use-cases/multi-tenant-saas/',
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+  },
+];
+---
+
+<Layout
+  title="Use Case Library — hierarchical-approval"
+  description="Production-ready approval workflow patterns for ERP systems. Accounts payable, HR leave, purchase orders, expense reports, contracts, and multi-tenant SaaS — each with complete TypeScript code and edge case handling."
+  weeklyDownloads="—"
+>
+  <Nav />
+  <main id="main-content">
+    <div class="breadcrumb-bar">
+      <div class="container breadcrumb">
+        <a href="/">Home</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Use Cases</span>
+      </div>
+    </div>
+
+    <section class="page-hero">
+      <div class="container">
+        <span class="section-label">Real-world patterns</span>
+        <h1 class="page-title">Use Case Library</h1>
+        <p class="page-sub">
+          Production-ready approval workflow patterns. Each scenario ships with complete TypeScript,
+          handles the edge cases you'll actually hit in production, and includes test examples
+          using <code>ApprovalTestKit</code>.
+        </p>
+        <div class="hub-stats" aria-label="Library stats">
+          <span class="hub-stat"><strong>6</strong> scenarios</span>
+          <span class="hub-sep" aria-hidden="true"></span>
+          <span class="hub-stat"><strong>18+</strong> edge cases</span>
+          <span class="hub-sep" aria-hidden="true"></span>
+          <span class="hub-stat"><strong>380</strong> tests</span>
+          <span class="hub-sep" aria-hidden="true"></span>
+          <span class="hub-stat">complete TypeScript</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="cases-section">
+      <div class="container">
+        <div class="cases-grid">
+          {cases.map((c) => (
+            <a href={c.href} class="case-card">
+              <div class="case-top">
+                <div class="case-icon" style={`background:${c.tagBg};color:${c.tagColor}`}>
+                  <Fragment set:html={c.icon} />
+                </div>
+                <span class="case-tag" style={`color:${c.tagColor}`}>{c.tag}</span>
+              </div>
+              <h2 class="case-title">{c.title}</h2>
+              <p class="case-desc">{c.desc}</p>
+              <div class="case-edges">
+                <div class="edge-label">Edge cases covered</div>
+                <ul class="edge-list">
+                  {c.edgeCases.map((e) => (
+                    <li>{e}</li>
+                  ))}
+                </ul>
+              </div>
+              <span class="case-cta">
+                View full example
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <polyline points="12 5 19 12 12 19"/>
+                </svg>
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  .breadcrumb-bar {
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-alt);
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-block: 0.875rem;
+    font-size: 0.8125rem;
+  }
+
+  .breadcrumb a { color: var(--text-2); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb span[aria-hidden] { color: var(--text-3); }
+  .breadcrumb span[aria-current] { color: var(--text); font-weight: 500; }
+
+  .page-hero {
+    padding-block: 4rem 3rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .page-title {
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  .page-sub {
+    font-size: 1.0625rem;
+    color: var(--text-2);
+    line-height: 1.65;
+    max-width: 58ch;
+  }
+
+  .page-sub code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    color: var(--accent);
+    background: var(--accent-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+  }
+
+  .hub-stats {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .hub-stat { font-size: 0.8125rem; color: var(--text-2); }
+  .hub-stat strong { color: var(--text); font-weight: 700; }
+  .hub-sep { width: 1px; height: 12px; border-right: 1px solid var(--border); flex-shrink: 0; }
+
+  .cases-section {
+    padding-block: 4rem;
+    background: var(--bg-alt);
+  }
+
+  .cases-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+
+  .case-card {
+    background: white;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    text-decoration: none;
+    box-shadow: var(--shadow-xs);
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+
+  .case-card:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+    text-decoration: none;
+  }
+
+  .case-top {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .case-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .case-tag {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .case-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+  }
+
+  .case-desc {
+    font-size: 0.875rem;
+    color: var(--text-2);
+    line-height: 1.65;
+    flex: 1;
+  }
+
+  .case-edges {
+    background: var(--bg-alt);
+    border-radius: var(--radius);
+    padding: 0.875rem 1rem;
+  }
+
+  .edge-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-3);
+    margin-bottom: 0.5rem;
+  }
+
+  .edge-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .edge-list li {
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    padding-left: 1rem;
+    position: relative;
+  }
+
+  .edge-list li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-size: 0.75rem;
+  }
+
+  .case-cta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  @media (max-width: 700px) {
+    .cases-grid { grid-template-columns: 1fr; }
+  }
+</style>

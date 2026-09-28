@@ -1,0 +1,774 @@
+---
+interface Props {
+  weeklyDownloads: string;
+}
+const { weeklyDownloads } = Astro.props;
+---
+
+<section class="hero" aria-label="Introduction">
+  <div class="hero-copy container">
+    <a href="/#plugins" class="hero-announce">
+      <span class="announce-tag">New in 0.6</span>
+      <span class="announce-text">Signed webhooks, pluggable scheduling &amp; cycle-time analytics — built in</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </a>
+
+    <div class="hero-eyebrow">
+      <span class="eyebrow-badge">npm library</span>
+      <span class="eyebrow-sep" aria-hidden="true"></span>
+      <span class="eyebrow-stat" id="weekly-downloads">{weeklyDownloads} downloads / week</span>
+      <span class="eyebrow-sep" aria-hidden="true"></span>
+      <span class="eyebrow-stat">MIT</span>
+    </div>
+
+    <h1>Stop hand-rolling<br /><span class="h1-accent">approval logic.</span></h1>
+    <p class="hero-sub">
+      A TypeScript-first workflow engine for ERP approval chains — optimistic locking,
+      idempotency, tamper-evident audit, SLA tracking, and conditional routing.
+      Drop-in plug-ins for compliance, observability and access control.
+      No BPMN. No infrastructure.
+    </p>
+
+    <div class="hero-stats" aria-label="Library stats">
+      <span class="stat"><strong>380</strong> tests</span>
+      <span class="stat-sep" aria-hidden="true"></span>
+      <span class="stat"><strong>6</strong> extension ports</span>
+      <span class="stat-sep" aria-hidden="true"></span>
+      <span class="stat"><strong>4</strong> plug-in suites</span>
+      <span class="stat-sep" aria-hidden="true"></span>
+      <span class="stat"><strong>0</strong> runtime deps</span>
+    </div>
+
+    <div class="hero-actions">
+      <div class="install-block">
+        <pre class="install-cmd"><code><span class="dim">$</span> npm install hierarchical-approval</code></pre>
+        <button class="copy-btn" data-copy="npm install hierarchical-approval" aria-label="Copy install command">
+          <svg class="icon-copy" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <svg class="icon-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </button>
+      </div>
+      <a href="/use-cases/" class="hero-link">
+        See use cases
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="5" y1="12" x2="19" y2="12"/>
+          <polyline points="12 5 19 12 12 19"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- Full-width visual panel -->
+  <div class="hero-visual-wrap">
+    <div class="container">
+      <div class="hero-visual">
+
+        <!-- Chain diagram -->
+        <div class="chain-panel" aria-hidden="true">
+          <div class="chain-panel-header">
+            <span class="panel-dot dot-red"></span>
+            <span class="panel-dot dot-amber"></span>
+            <span class="panel-dot dot-green"></span>
+            <span class="panel-label">approval-engine &mdash; PO-0042 &middot; $15,000</span>
+          </div>
+          <div class="chain-body">
+            <div class="chain-scroll">
+              <div class="chain">
+
+                <div class="chain-node node-doc">
+                  <div class="node-icon-wrap doc-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                  </div>
+                  <div class="node-name">Submitted</div>
+                  <div class="node-meta">PO-0042</div>
+                  <div class="node-badge badge-submitted">pending</div>
+                </div>
+
+                <div class="connector c1"><div class="connector-fill"></div></div>
+
+                <div class="chain-node node-level l1">
+                  <div class="node-icon-wrap">
+                    <svg class="icon-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <svg class="icon-clock" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </div>
+                  <div class="node-name">Manager</div>
+                  <div class="node-meta">level 1</div>
+                  <div class="node-badge badge-approved">approved</div>
+                  <div class="node-badge badge-pending">pending</div>
+                </div>
+
+                <div class="connector c2"><div class="connector-fill"></div></div>
+
+                <div class="chain-node node-level l2">
+                  <div class="node-icon-wrap">
+                    <svg class="icon-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <svg class="icon-clock" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </div>
+                  <div class="node-name">Finance</div>
+                  <div class="node-meta">level 2</div>
+                  <div class="node-badge badge-approved">approved</div>
+                  <div class="node-badge badge-pending">pending</div>
+                </div>
+
+                <div class="connector c3"><div class="connector-fill"></div></div>
+
+                <div class="chain-node node-level l3">
+                  <div class="node-icon-wrap">
+                    <svg class="icon-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <svg class="icon-clock" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </div>
+                  <div class="node-name">CFO</div>
+                  <div class="node-meta">level 3</div>
+                  <div class="node-badge badge-approved">approved</div>
+                  <div class="node-badge badge-pending">pending</div>
+                </div>
+
+              </div>
+            </div>
+            <p class="chain-caption">amount &gt; $10k → Finance added automatically · amount &gt; $50k → CFO added</p>
+          </div>
+        </div>
+
+        <!-- Events log -->
+        <div class="events-panel" aria-hidden="true">
+          <div class="events-header">
+            <span class="events-label">⚡ live events</span>
+            <span class="events-pill">streaming</span>
+          </div>
+          <div class="events-body">
+            <div class="events-scroll">
+              <div class="log-line"><span class="ts">11:42:03</span><span class="act act-sub">submitted</span><span class="ev">PO-2847    $48,500   → chain built: 3 levels</span></div>
+              <div class="log-line"><span class="ts">11:42:05</span><span class="act act-ok">approved </span><span class="ev">level:1    Manager   → advancing to level 2</span></div>
+              <div class="log-line"><span class="ts">11:42:07</span><span class="act act-ok">approved </span><span class="ev">level:2    Finance   → advancing to level 3</span></div>
+              <div class="log-line"><span class="ts">11:42:09</span><span class="act act-ok">approved </span><span class="ev">level:3    CFO       → COMPLETED ✓</span></div>
+              <div class="log-line"><span class="ts">11:42:11</span><span class="act act-sub">submitted</span><span class="ev">INV-0391   $2,100    → chain built: 2 levels</span></div>
+              <div class="log-line"><span class="ts">11:42:13</span><span class="act act-ok">approved </span><span class="ev">level:1    Manager   → advancing to level 2</span></div>
+              <div class="log-line"><span class="ts">11:42:15</span><span class="act act-no">rejected </span><span class="ev">level:2    Finance   → REJECTED ✗ over budget</span></div>
+              <div class="log-line"><span class="ts">11:42:17</span><span class="act act-sub">submitted</span><span class="ev">LEAVE-07   Annual    → chain built: 1 level</span></div>
+              <div class="log-line"><span class="ts">11:42:19</span><span class="act act-ok">approved </span><span class="ev">level:1    Manager   → COMPLETED ✓</span></div>
+              <!-- duplicated for seamless loop -->
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:03</span><span class="act act-sub">submitted</span><span class="ev">PO-2847    $48,500   → chain built: 3 levels</span></div>
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:05</span><span class="act act-ok">approved </span><span class="ev">level:1    Manager   → advancing to level 2</span></div>
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:07</span><span class="act act-ok">approved </span><span class="ev">level:2    Finance   → advancing to level 3</span></div>
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:09</span><span class="act act-ok">approved </span><span class="ev">level:3    CFO       → COMPLETED ✓</span></div>
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:11</span><span class="act act-sub">submitted</span><span class="ev">INV-0391   $2,100    → chain built: 2 levels</span></div>
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:13</span><span class="act act-ok">approved </span><span class="ev">level:1    Manager   → advancing to level 2</span></div>
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:15</span><span class="act act-no">rejected </span><span class="ev">level:2    Finance   → REJECTED ✗ over budget</span></div>
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:17</span><span class="act act-sub">submitted</span><span class="ev">LEAVE-07   Annual    → chain built: 1 level</span></div>
+              <div class="log-line" aria-hidden="true"><span class="ts">11:42:19</span><span class="act act-ok">approved </span><span class="ev">level:1    Manager   → COMPLETED ✓</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const text = btn.getAttribute('data-copy') ?? '';
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.classList.add('copied');
+        setTimeout(() => btn.classList.remove('copied'), 2000);
+      } catch {}
+    });
+  });
+</script>
+
+<style>
+  /* ── Section ── */
+  .hero {
+    background: var(--bg);
+    padding-top: 5rem;
+  }
+
+  /* ── Copy block ── */
+  .hero-copy {
+    max-width: 680px;
+    padding-bottom: 3.5rem;
+  }
+
+  /* Announcement pill */
+  .hero-announce {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin-bottom: 1.75rem;
+    padding: 0.375rem 0.875rem 0.375rem 0.375rem;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: 980px;
+    box-shadow: var(--shadow-xs);
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    text-decoration: none;
+    transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+    max-width: 100%;
+  }
+
+  .hero-announce:hover {
+    text-decoration: none;
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+    border-color: var(--accent-mid);
+  }
+
+  .announce-tag {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: white;
+    background: var(--accent);
+    padding: 0.1875rem 0.5rem;
+    border-radius: 980px;
+    letter-spacing: 0.01em;
+  }
+
+  .announce-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hero-announce svg { flex-shrink: 0; color: var(--accent); transition: transform 0.2s; }
+  .hero-announce:hover svg { transform: translateX(2px); }
+
+  .h1-accent {
+    background: linear-gradient(90deg, var(--accent) 0%, #2ea66a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--accent);
+  }
+
+  .hero-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.75rem;
+    flex-wrap: wrap;
+  }
+
+  .eyebrow-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-mid);
+    padding: 0.25rem 0.625rem;
+    border-radius: 980px;
+  }
+
+  .eyebrow-sep {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  .eyebrow-stat {
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    font-family: var(--font-mono);
+  }
+
+  h1 {
+    font-size: clamp(2.75rem, 6vw, 4.5rem);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    margin-bottom: 1.25rem;
+    color: var(--text);
+  }
+
+  .hero-sub {
+    font-size: 1.125rem;
+    color: var(--text-2);
+    line-height: 1.65;
+    max-width: 54ch;
+    margin-bottom: 2rem;
+  }
+
+  /* Stats */
+  .hero-stats {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .stat { font-size: 0.8125rem; color: var(--text-2); }
+  .stat strong { color: var(--text); font-weight: 700; }
+  .stat-sep { width: 1px; height: 12px; border-right: 1px solid var(--border); flex-shrink: 0; }
+
+  /* Actions */
+  .hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .install-block {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .install-cmd {
+    padding: 0.6875rem 1rem;
+    font-size: 0.875rem;
+    background: none;
+    border: none;
+  }
+
+  .install-cmd code { color: var(--text); }
+  .dim { color: var(--text-3); margin-right: 0.5rem; }
+
+  .copy-btn {
+    height: 100%;
+    padding: 0.6875rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--border);
+    color: var(--text-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .copy-btn:hover { color: var(--text-2); background: white; }
+
+  /* Checkmark feedback */
+  .copy-btn .icon-check { display: none; }
+  .copy-btn.copied .icon-copy { display: none; }
+  .copy-btn.copied .icon-check { display: block; }
+  .copy-btn.copied { color: var(--accent); background: var(--accent-bg); border-left-color: var(--accent-mid); }
+
+  .hero-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--accent);
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+
+  .hero-link:hover { opacity: 0.75; text-decoration: none; }
+
+  /* ── Visual panel ── */
+  .hero-visual-wrap {
+    border-top: 1px solid var(--border-light);
+    background: var(--bg-alt);
+    padding-block: 2.5rem;
+  }
+
+  .hero-visual {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  /* Chain panel */
+  .chain-panel {
+    background: white;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .chain-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .panel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .dot-red   { background: #ff5f57; }
+  .dot-amber { background: #febc2e; }
+  .dot-green { background: #28c840; }
+
+  .panel-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--text-3);
+    margin-left: 0.25rem;
+  }
+
+  .chain-body { padding: 2rem 1.5rem 1.5rem; }
+
+  .chain-scroll {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chain-scroll::-webkit-scrollbar { display: none; }
+
+  .chain {
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+  }
+
+  .chain-caption {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-3);
+    margin-top: 1.25rem;
+    letter-spacing: 0.02em;
+  }
+
+  /* Nodes */
+  .chain-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 1rem 1.125rem;
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border);
+    background: white;
+    width: 110px;
+    box-shadow: var(--shadow-xs);
+    position: relative;
+    transition: border-color 0.35s, background 0.35s, box-shadow 0.35s;
+  }
+
+  .node-doc { border-color: var(--accent); background: var(--accent-bg); }
+
+  .node-icon-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-alt);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .doc-icon { color: var(--accent); }
+
+  .node-name { font-size: 0.775rem; font-weight: 600; color: var(--text); }
+  .node-meta { font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-3); }
+
+  .node-badge {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 0.125rem 0.4rem;
+    border-radius: 3px;
+    text-transform: lowercase;
+  }
+
+  .badge-submitted { background: var(--accent-bg); color: var(--accent); }
+  .node-icon-wrap .icon-check,
+  .node-icon-wrap .icon-clock { position: absolute; }
+
+  .connector {
+    height: 1.5px;
+    width: 48px;
+    background: var(--border);
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .connector-fill {
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+
+  /* Events panel */
+  .events-panel {
+    background: #1c1c1e;
+    border: 1px solid #3a3a3c;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .events-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.625rem 0.875rem;
+    background: #2c2c2e;
+    border-bottom: 1px solid #3a3a3c;
+    flex-shrink: 0;
+  }
+
+  .events-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: #8e8e93;
+    letter-spacing: 0.03em;
+  }
+
+  .events-pill {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #32d74b;
+    background: rgba(50, 215, 75, 0.12);
+    padding: 0.15rem 0.5rem;
+    border-radius: 980px;
+    border: 1px solid rgba(50, 215, 75, 0.3);
+  }
+
+  .events-body {
+    flex: 1;
+    overflow: hidden;
+    padding: 0.375rem 0;
+  }
+
+  .events-scroll {
+    animation: logscroll 14s linear infinite;
+  }
+
+  @keyframes logscroll {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(-50%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .events-scroll { animation: none; }
+  }
+
+  .log-line {
+    display: grid;
+    grid-template-columns: 58px 64px 1fr;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.2rem 0.875rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+
+  .ts     { color: #48484a; }
+  .act    { font-weight: 600; }
+  .act-sub { color: #0a84ff; }
+  .act-ok  { color: #32d74b; }
+  .act-no  { color: #ff453a; }
+  .ev     { color: #8e8e93; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Chain animations ── */
+  .l1 { animation: node-l1 15s ease-in-out infinite; }
+  .l1 .icon-check { animation: check-l1 15s ease-in-out infinite; }
+  .l1 .icon-clock { animation: clock-l1 15s ease-in-out infinite; }
+  .l1 .badge-approved { animation: badge-approved-l1 15s ease-in-out infinite; display: none; }
+  .l1 .badge-pending  { animation: badge-pending-l1 15s ease-in-out infinite; display: none; }
+  .c1 .connector-fill { animation: fill-l1 15s ease-in-out infinite; }
+
+  @keyframes node-l1 {
+    0%   { border-color: var(--border); background: white; }
+    5%   { border-color: #b45309; background: var(--amber-bg); }
+    24%  { border-color: #b45309; background: var(--amber-bg); }
+    30%  { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 3px var(--accent-bg); }
+    95%  { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 3px var(--accent-bg); }
+    100% { border-color: var(--border); background: white; }
+  }
+  @keyframes check-l1 {
+    0%, 25% { opacity: 0; transform: scale(0.5); color: var(--accent); }
+    35%, 95% { opacity: 1; transform: scale(1); color: var(--accent); }
+    100% { opacity: 0; transform: scale(0.5); }
+  }
+  @keyframes clock-l1 {
+    0%, 1% { opacity: 0; transform: scale(0.8); color: var(--amber); }
+    5%, 24% { opacity: 1; transform: scale(1); color: var(--amber); }
+    30%, 100% { opacity: 0; transform: scale(0.8); }
+  }
+  @keyframes badge-pending-l1 {
+    0% { display: none; opacity: 0; }
+    4.9% { display: block; opacity: 0; }
+    5% { display: block; opacity: 1; background: var(--amber-bg); color: var(--amber); }
+    24% { display: block; opacity: 1; }
+    25% { display: none; opacity: 0; }
+    100% { display: none; opacity: 0; }
+  }
+  @keyframes badge-approved-l1 {
+    0%, 29% { display: none; opacity: 0; }
+    30% { display: block; opacity: 1; background: var(--accent-bg); color: var(--accent); }
+    95% { display: block; opacity: 1; }
+    100% { display: none; opacity: 0; }
+  }
+  @keyframes fill-l1 {
+    0%, 25% { transform: scaleX(0); }
+    35%, 95% { transform: scaleX(1); }
+    100% { transform: scaleX(0); }
+  }
+
+  .l2 { animation: node-l2 15s ease-in-out infinite; }
+  .l2 .icon-check { animation: check-l2 15s ease-in-out infinite; }
+  .l2 .icon-clock { animation: clock-l2 15s ease-in-out infinite; }
+  .l2 .badge-approved { animation: badge-approved-l2 15s ease-in-out infinite; display: none; }
+  .l2 .badge-pending  { animation: badge-pending-l2 15s ease-in-out infinite; display: none; }
+  .c2 .connector-fill { animation: fill-l2 15s ease-in-out infinite; }
+
+  @keyframes node-l2 {
+    0%, 25% { border-color: var(--border); background: white; opacity: 0.5; }
+    28% { border-color: #b45309; background: var(--amber-bg); opacity: 1; }
+    49% { border-color: #b45309; background: var(--amber-bg); opacity: 1; }
+    55% { border-color: var(--accent); background: var(--accent-bg); opacity: 1; box-shadow: 0 0 0 3px var(--accent-bg); }
+    95% { border-color: var(--accent); background: var(--accent-bg); opacity: 1; box-shadow: 0 0 0 3px var(--accent-bg); }
+    100% { border-color: var(--border); background: white; opacity: 0.5; }
+  }
+  @keyframes check-l2 {
+    0%, 50% { opacity: 0; transform: scale(0.5); }
+    60%, 95% { opacity: 1; transform: scale(1); color: var(--accent); }
+    100% { opacity: 0; }
+  }
+  @keyframes clock-l2 {
+    0%, 26% { opacity: 0; }
+    28%, 49% { opacity: 1; color: var(--amber); }
+    55%, 100% { opacity: 0; }
+  }
+  @keyframes badge-pending-l2 {
+    0%, 27% { display: none; opacity: 0; }
+    28% { display: block; opacity: 1; background: var(--amber-bg); color: var(--amber); }
+    49% { display: block; opacity: 1; }
+    50% { display: none; opacity: 0; }
+    100% { display: none; opacity: 0; }
+  }
+  @keyframes badge-approved-l2 {
+    0%, 54% { display: none; opacity: 0; }
+    55% { display: block; opacity: 1; background: var(--accent-bg); color: var(--accent); }
+    95% { display: block; opacity: 1; }
+    100% { display: none; opacity: 0; }
+  }
+  @keyframes fill-l2 {
+    0%, 50% { transform: scaleX(0); }
+    60%, 95% { transform: scaleX(1); }
+    100% { transform: scaleX(0); }
+  }
+
+  .l3 { animation: node-l3 15s ease-in-out infinite; }
+  .l3 .icon-check { animation: check-l3 15s ease-in-out infinite; }
+  .l3 .icon-clock { animation: clock-l3 15s ease-in-out infinite; }
+  .l3 .badge-approved { animation: badge-approved-l3 15s ease-in-out infinite; display: none; }
+  .l3 .badge-pending  { animation: badge-pending-l3 15s ease-in-out infinite; display: none; }
+  .c3 .connector-fill { animation: fill-l3 15s ease-in-out infinite; }
+
+  @keyframes node-l3 {
+    0%, 52% { border-color: var(--border); background: white; opacity: 0.35; }
+    55% { border-color: #b45309; background: var(--amber-bg); opacity: 1; }
+    74% { border-color: #b45309; background: var(--amber-bg); opacity: 1; }
+    80% { border-color: var(--accent); background: var(--accent-bg); opacity: 1; box-shadow: 0 0 0 3px var(--accent-bg); }
+    95% { border-color: var(--accent); background: var(--accent-bg); opacity: 1; box-shadow: 0 0 0 3px var(--accent-bg); }
+    100% { border-color: var(--border); background: white; opacity: 0.35; }
+  }
+  @keyframes check-l3 {
+    0%, 75% { opacity: 0; transform: scale(0.5); }
+    82%, 95% { opacity: 1; transform: scale(1); color: var(--accent); }
+    100% { opacity: 0; }
+  }
+  @keyframes clock-l3 {
+    0%, 53% { opacity: 0; }
+    55%, 74% { opacity: 1; color: var(--amber); }
+    80%, 100% { opacity: 0; }
+  }
+  @keyframes badge-pending-l3 {
+    0%, 54% { display: none; opacity: 0; }
+    55% { display: block; opacity: 1; background: var(--amber-bg); color: var(--amber); }
+    74% { display: block; opacity: 1; }
+    75% { display: none; opacity: 0; }
+    100% { display: none; opacity: 0; }
+  }
+  @keyframes badge-approved-l3 {
+    0%, 79% { display: none; opacity: 0; }
+    80% { display: block; opacity: 1; background: var(--accent-bg); color: var(--accent); }
+    95% { display: block; opacity: 1; }
+    100% { display: none; opacity: 0; }
+  }
+  @keyframes fill-l3 {
+    0%, 75% { transform: scaleX(0); }
+    83%, 95% { transform: scaleX(1); }
+    100% { transform: scaleX(0); }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .hero-visual {
+      grid-template-columns: 1fr;
+    }
+
+    .events-panel {
+      height: 180px;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .hero { padding-top: 3rem; }
+    h1 { font-size: 2.25rem; }
+    .hero-sub { font-size: 1rem; }
+    .hero-copy { padding-bottom: 2.5rem; }
+    .install-cmd { font-size: 0.8125rem; }
+  }
+</style>
+
+<script>
+  fetch('https://api.npmjs.org/downloads/point/last-week/hierarchical-approval')
+    .then(r => r.json())
+    .then(data => {
+      if (typeof data.downloads === 'number') {
+        const el = document.getElementById('weekly-downloads');
+        if (el) el.textContent = data.downloads.toLocaleString('en-US') + ' downloads / week';
+      }
+    })
+    .catch(() => {});
+</script>
