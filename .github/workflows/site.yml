@@ -1,0 +1,100 @@
+name: Site
+
+# `check` runs on every pull request and every push to main. It is the gate a
+# pull request waits on before it merges. `deploy` runs only for main, only
+# after `check` passes, and publishes the exact dist/ that `check` built — the
+# site is never built twice for one commit.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Nothing here writes to the repository; the deploy authenticates with its own
+# key, not the workflow token.
+permissions:
+  contents: read
+
+env:
+  SITE_HOST: hierarchical-approval.matthewswong.com
+
+jobs:
+  check:
+    name: Type-check & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # A superseded check is pure waste; drop it the moment it is stale.
+    concurrency:
+      group: check-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Keep the build for the deploy job
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to VPS
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Never cancel a deploy mid-rsync; a newer one waits its turn instead.
+    concurrency:
+      group: deploy-site
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # The key is accepted only by rrsync in write-only mode, confined to the
+      # web root, so it cannot open a shell, read files or leave that directory.
+      # The host key is pinned rather than trusted on first use.
+      - name: Install the deploy key
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # --delay-updates moves every changed file into place at the end, so a
+      # reader never sees a half-old, half-new site. --chmod is load-bearing:
+      # rsync otherwise copies the runner's directory modes onto the web root,
+      # and a 700 there locks nginx out of the whole site.
+      - name: Rsync dist/ into the web root
+        env:
+          VPS_HOST: ${{ secrets.VPS_SSH_HOST }}
+        run: |
+          rsync -rlt --chmod=D755,F644 --delete-after --delay-updates \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes" \
+            dist/ "deploy@${VPS_HOST}:/"
+
+      # Ask the origin directly, past Cloudflare's cache, and require the page
+      # it serves to be byte-identical to the one this run built.
+      - name: Verify the origin serves this build
+        env:
+          VPS_HOST: ${{ secrets.VPS_SSH_HOST }}
+        run: |
+          served="$(curl -fsS --retry 3 --resolve "${SITE_HOST}:443:${VPS_HOST}" \
+            "https://${SITE_HOST}/" | sha256sum | cut -d' ' -f1)"
+          built="$(sha256sum < dist/index.html | cut -d' ' -f1)"
+          if [ "$served" != "$built" ]; then
+            echo "::error::origin serves ${served}, this build is ${built}"
+            exit 1
+          fi
+          echo "origin serves this build (${built})"
