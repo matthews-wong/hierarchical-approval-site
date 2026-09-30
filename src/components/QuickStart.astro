@@ -5,6 +5,10 @@ import { MemoryAdapter } from 'hierarchical-approval/adapters/memory';
 const engine = new ApprovalEngine({
   adapter: new MemoryAdapter(),
   tenantId: 'acme',
+  // Resolves the 'finance-team' role used by the Finance level below
+  orgProvider: {
+    getUsersByRole: (role) => (role === 'finance-team' ? ['fin-1'] : []),
+  },
 });
 
 // 1 — Define a reusable template
