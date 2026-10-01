@@ -23,6 +23,10 @@ const steps = [
     ],
     code: hl(`const engine = new ApprovalEngine({
   adapter: new MemoryAdapter(), // swap PostgresAdapter in prod
+  // Resolves the 'finance-team' role used by the Finance level
+  orgProvider: {
+    getUsersByRole: (role) => (role === 'finance-team' ? ['fin-1'] : []),
+  },
 });
 
 await engine.defineTemplate({
@@ -76,20 +80,20 @@ await engine.defineTemplate({
       'CONFLICT thrown on concurrent approvals',
       'Events fired after every state change',
     ],
-    code: hl(`// Manager approves
+    code: hl(`// Listen for completion before the last approval lands
+engine.on('approval:completed', (inst) => {
+  console.log(inst.status); // 'approved'
+  console.log(inst.auditLog.length); // 3 entries
+});
+
+// Manager approves
 await engine.approve(instance.id, {
   approverId: 'mgr-1',
   comment: 'Looks good',
 });
 
 // Finance approves — instance status is now 'approved'
-await engine.approve(instance.id, { approverId: 'fin-1' });
-
-// Listen for completion
-engine.on('approval:completed', (inst) => {
-  console.log(inst.status); // 'approved'
-  console.log(inst.auditLog.length); // 4 entries
-});`),
+await engine.approve(instance.id, { approverId: 'fin-1' });`),
   },
 ];
 ---
