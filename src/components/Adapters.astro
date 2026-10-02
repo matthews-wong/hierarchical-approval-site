@@ -48,7 +48,7 @@ const adapters = [
   {
     name: 'IMetricsAdapter',
     purpose: 'Prometheus / Datadog / OpenTelemetry',
-    example: '10 built-in metric names including approval.operation_duration_ms.',
+    example: '17 built-in metric names including approval.operation_duration_ms.',
     icon: `<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,
     snippet: `class PrometheusAdapter implements IMetricsAdapter {
   increment(metric: MetricName, labels?: Record<string, string>) {
@@ -123,8 +123,10 @@ const adapterCards = adapters.map(a => ({ ...a, html: hl(a.snippet) }));
     <span class="section-label">Extension ports</span>
     <h2 class="section-title" id="adapters-title">Plug in. Don't fork.</h2>
     <p class="section-sub">
-      Six typed interfaces let you wire the engine into your stack. All are fail-safe — a broken
-      Kafka connection will never prevent an approval from completing. Need them ready-made?
+      Six typed interfaces let you wire the engine into your stack. Notification and audit
+      adapters are fail-safe — errors are logged and swallowed, so a broken Kafka connection
+      will never prevent an approval from completing. An authorization policy, by design, can
+      deny an operation. Need them ready-made?
       <a href="#plugins">Jump to the built-in plug-ins ↓</a>
     </p>
 
