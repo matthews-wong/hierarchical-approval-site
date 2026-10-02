@@ -73,6 +73,7 @@ const adapters = [
     return job.id;
   }
   async cancel(handle) { await queue.remove(handle); }
+  async shutdown() { await queue.close(); }
 }`,
     color: '#7c3aed',
     colorBg: '#f5f3ff',
