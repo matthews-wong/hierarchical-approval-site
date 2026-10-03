@@ -28,7 +28,7 @@ const audit = new HashChainAuditAdapter();
 const engine = new ApprovalEngine({ adapter, auditAdapter: audit });
 
 // Prove the log was never altered:
-audit.verify(tenantId, instanceId);
+await audit.verify(tenantId, instanceId);
 // → { ok: true } | { ok: false, brokenAt: 3 }`,
     color: '#b45309', colorBg: '#fef9ee',
   },
@@ -108,7 +108,7 @@ await outbox.deadLettered(); // inspect failures`,
     icon: `<circle cx="12" cy="12" r="3"/><path d="M12 2v7M12 15v7M2 12h7M15 12h7"/>`,
     includes: [
       ['TracingMiddleware', 'span approval.<op> with tenant, actor, instance & error-code attributes'],
-      ['ITracer port', 'structurally satisfied by a real @opentelemetry/api Tracer'],
+      ['Tracer port', 'structurally satisfied by a real @opentelemetry/api Tracer'],
       ['noopTracer', 'the default — tracing costs nothing until you wire it'],
     ],
     snippet: `import { TracingMiddleware } from
