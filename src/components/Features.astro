@@ -33,7 +33,7 @@ const features = [
   {
     icon: `<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>`,
     title: 'Bulk operations',
-    desc: 'bulkApprove() and bulkReject() process up to 200 instances per call. Individual failures are collected — the batch never aborts on a single error.',
+    desc: 'bulkApprove() and bulkReject() process up to 200 instances per call by default (maxBulkItems). Individual failures are collected in result.failed; a larger batch throws a validation error.',
     color: '#dc2626', colorBg: '#fef2f2',
   },
   {
