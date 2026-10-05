@@ -68,8 +68,8 @@ await engine.delegate(po.id, {
   reason: 'On leave until Monday',
 });
 
-// Or reject and stop the chain:
-await engine.reject(po.id, { approverId: 'manager_alice', reason: 'Not in this quarter budget' });`);
+// Or reject and stop the chain (only an approver of the open level can):
+await engine.reject(po.id, { approverId: 'finance_charlie', reason: 'Not in this quarter budget' });`);
 
 const auditCode = hl(`const history = await engine.getHistory(po.id);
 // [
@@ -162,8 +162,8 @@ const articleSchema = {
           BPMN engines (Camunda) and durable workflow runtimes (Temporal) can model this, but they
           bring servers, DSLs, and operational weight that a CRUD app rarely wants.
           <strong>hierarchical-approval</strong> is the middle ground: a focused, embeddable
-          TypeScript engine for multi-level approvals — with optimistic locking, idempotency, and a
-          tamper-evident audit trail — and nothing to deploy.
+          TypeScript engine for multi-level approvals — with optimistic locking, idempotency, and an
+          audit trail — and nothing to deploy.
         </p>
 
         <h2>Install</h2>
@@ -172,7 +172,7 @@ const articleSchema = {
         <h2>Define a template</h2>
         <p>
           A <em>template</em> describes the chain. Levels resolve in order; each level has a
-          <code>mode</code> (<code>any</code>, <code>all</code>, or a quorum). Conditions add levels
+          <code>mode</code> (<code>any</code>, <code>all</code>, <code>majority</code>, <code>quorum</code>, or <code>weighted</code>). Conditions add levels
           based on the document's data — here, orders over $10,000 get a CFO step.
         </p>
         <pre class="guide-code"><code set:html={templateCode}></code></pre>
