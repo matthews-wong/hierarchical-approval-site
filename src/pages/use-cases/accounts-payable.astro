@@ -99,41 +99,43 @@ await engine.approve(instance.id, {
 
 // The CFO is now the open level (level 3)...`);
 
-const raceCode = hl(`// Two approvers at the same level try to approve simultaneously.
-// The library uses optimistic locking — second write loses cleanly.
+const raceCode = hl(`import { ApprovalConflictError } from 'hierarchical-approval';
+
+// Two approvers act on the same instance at the same moment.
+// The storage adapter rejects the stale write; the engine retries it
+// (3 attempts by default) before giving up.
 
 try {
-  await engine.approve({ tenantId, instanceId, actorId: 'approver-a' });
+  await engine.approve(instanceId, { approverId: 'approver-a' });
 } catch (err) {
-  if (err.code === 'CONFLICT') {
-    // Another approver already advanced this level.
-    // Re-fetch the instance to see the current state.
-    const current = await engine.getInstance({ tenantId, instanceId });
+  if (err instanceof ApprovalConflictError) {
+    // Still conflicting after every retry. Re-fetch to see the current state.
+    const current = await engine.getInstance(instanceId);
     console.log('Current level:', current.currentLevel);
   }
 }`);
 
-const slaCode = hl(`// Wire a real job scheduler for SLA escalation (instead of polling)
+const slaCode = hl(`// Wire a real job scheduler for the escalation scan (instead of polling)
 import { BullMQScheduler } from './adapters/bullmq-scheduler';
 
 const engine = new ApprovalEngine({
-  storage: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
-  scheduler: new BullMQScheduler({ redis: redisConnection }),
-  // The engine calls scheduler.scheduleAt(id, deadline, callback)
-  // BullMQ fires the callback at the right time — no polling needed
+  adapter: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  schedulerAdapter: new BullMQScheduler({ redis: redisConnection }),
+  // The engine calls scheduler.scheduleAt(id, runAt, callback) for each scan;
+  // BullMQ fires the callback at that time instead of a setInterval poll
 });`);
 
-const delegateCode = hl(`// Dept head going on leave: delegate approval rights before leaving
-await engine.delegate({
-  tenantId: 'acme-corp',
-  fromActorId: 'user-dept-head-42',
-  toActorId: 'user-backup-head',
-  validUntil: new Date('2025-08-15'),
+const delegateCode = hl(`// Dept head going on leave: hand the open level to a colleague
+await engine.delegate(instance.id, {
+  fromApprover: 'user-dept-head-42',
+  toApprover: 'user-backup-head',
+  reason: 'On leave until 15 Aug',
+  until: new Date('2027-08-15'),
 });
 
-// Future engine.approve() calls from 'user-backup-head'
-// are accepted for any instance where 'user-dept-head-42' is an approver.
-// Audit trail records: "approved by user-backup-head on behalf of user-dept-head-42"`);
+// 'user-backup-head' can now approve this instance's open level.
+// When 'until' passes, the scheduled scan reassigns the seat back to
+// 'user-dept-head-42'. The audit trail records the delegation.`);
 ---
 
 <UseCaseLayout
@@ -277,7 +279,8 @@ await engine.delegate({
           </div>
           <p class="edge-note">
             The library increments a <code>version</code> field on every write.
-            A conflicting write throws <code>CONFLICT</code> — the caller re-fetches and retries if needed.
+            A stale write throws <code>ApprovalConflictError</code>; the engine retries it
+            up to 3 times by default, so you only see the error if the conflict persists.
           </p>
         </div>
 
@@ -285,8 +288,10 @@ await engine.delegate({
           <div class="edge-num">02</div>
           <h3 class="edge-title">SLA breach escalation</h3>
           <p class="edge-desc">
-            When <code>slaHours</code> elapses with no action, the engine auto-escalates.
-            The default poll interval works for dev; production needs a real job scheduler.
+            When <code>slaDeadlineDays</code> elapses with no decision, the engine emits
+            <code>approval:sla_breached</code>. A level's <code>escalationAfterDays</code> adds
+            an escalation approver. Both run on a scan that polls every minute by default;
+            production can hand that scan to a real job scheduler.
           </p>
           <div class="code-block">
             <div class="code-header">
@@ -305,8 +310,8 @@ await engine.delegate({
           <div class="edge-num">03</div>
           <h3 class="edge-title">Approver on leave — delegation</h3>
           <p class="edge-desc">
-            The department head is on vacation. Without delegation, every invoice submitted
-            during that period will breach SLA and escalate.
+            The department head is on vacation. Without delegation, an invoice waiting on
+            them sits until it breaches SLA.
           </p>
           <div class="code-block">
             <div class="code-header">
@@ -316,8 +321,9 @@ await engine.delegate({
             <pre class="code-pre"><code><Fragment set:html={delegateCode} /></code></pre>
           </div>
           <p class="edge-note">
-            Delegation is time-scoped. The audit trail records who acted on whose behalf,
-            keeping compliance records accurate.
+            Delegation applies to one instance's open level. With <code>until</code> set it
+            reverts automatically; omit it for a permanent handoff. For standing cover across
+            every invoice, supply an <code>outOfOfficeProvider</code> instead.
           </p>
         </div>
       </div>
