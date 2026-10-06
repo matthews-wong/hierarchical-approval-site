@@ -65,11 +65,11 @@ await engine.defineTemplate({
 
 const submitCode = hl(`// Submit an invoice for approval
 const instance = await engine.submit({
-  tenantId: 'acme-corp',
   templateName: 'accounts-payable',
+  documentId: 'INV-2847',
+  documentType: 'invoice',
   submittedBy: 'emp-4821',
   data: {
-    invoiceNumber: 'INV-2847',
     vendorId: 'vendor-99',
     amount: 15_000,
     currency: 'USD',
@@ -78,29 +78,26 @@ const instance = await engine.submit({
 });
 
 // instance.status === 'pending'
-// instance.currentLevel === 1  (awaiting dept head)
-console.log(instance.id); // 'ap-instance-uuid'`);
+// instance.currentLevel === 1  (awaiting the department head)
+// instance.levels.length === 3 (amount > 10,000 adds Finance and CFO)
+console.log(instance.id);`);
 
-const approveCode = hl(`// Dept head approves (level 1)
-await engine.approve({
-  tenantId: 'acme-corp',
-  instanceId: instance.id,
-  actorId: 'user-dept-head-42',
+const approveCode = hl(`// Department head approves (level 1)
+await engine.approve(instance.id, {
+  approverId: 'user-dept-head-42',
   comment: 'Approved - valid vendor contract',
 });
 
-// instance now advances to level 2 (Finance Manager)
-// INotificationAdapter fires: approval:level_advanced
+// The instance advances to level 2 (Finance manager)
+// INotificationAdapter receives approval:level_advanced
 
 // Finance manager approves (level 2)
-await engine.approve({
-  tenantId: 'acme-corp',
-  instanceId: instance.id,
-  actorId: 'user-finance-mgr',
+await engine.approve(instance.id, {
+  approverId: 'user-finance-mgr',
   comment: 'Within Q3 budget',
 });
 
-// CFO is now notified (level 3)...`);
+// The CFO is now the open level (level 3)...`);
 
 const raceCode = hl(`// Two approvers at the same level try to approve simultaneously.
 // The library uses optimistic locking — second write loses cleanly.
@@ -226,7 +223,8 @@ await engine.delegate({
         <span class="section-label-sm">Step 2 &amp; 3</span>
         <h2 class="code-heading">Submit and approve</h2>
         <p class="code-desc">
-          <code>engine.submit()</code> builds the chain and creates the instance.
+          <code>engine.submit()</code> evaluates the template's conditions against
+          <code>data</code> and creates the instance.
           Each <code>engine.approve()</code> advances to the next level and fires
           your <code>INotificationAdapter</code>.
         </p>
