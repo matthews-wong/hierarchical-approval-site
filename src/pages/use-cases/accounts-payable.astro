@@ -3,71 +3,64 @@ import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
 import { hl } from '../../lib/highlight';
 
 const configCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
-import { PostgresAdapter } from 'hierarchical-approval/adapters';
-import { z } from 'zod';
+import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
 
 const engine = new ApprovalEngine({
-  storage: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  adapter: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  tenantId: 'acme-corp',
+  // Resolves every { type: 'role' } approver below
+  orgProvider: { getUsersByRole: (role) => directory.usersWithRole(role) },
 });
 
-const InvoiceSchema = z.object({
-  invoiceNumber: z.string(),
-  vendorId: z.string(),
-  amount: z.number().positive(),
-  currency: z.string().default('USD'),
-  departmentId: z.string(),
-});
-
-engine.defineTemplate({
+await engine.defineTemplate({
   name: 'accounts-payable',
-  schema: InvoiceSchema,
-  buildChain: async (data, tenantId) => {
-    const levels = [];
-
-    // Level 1: Department head always required
-    const deptHead = await db.query(
-      'SELECT user_id FROM dept_heads WHERE dept_id = $1 AND tenant_id = $2',
-      [data.departmentId, tenantId]
-    );
-    levels.push({
-      levelOrder: 1,
-      approvers: [{ approverType: 'user', value: deptHead.rows[0].user_id }],
-      slaHours: 48,
-    });
-
-    // Level 2: Finance manager for invoices over $1,000
-    if (data.amount > 1_000) {
-      levels.push({
-        levelOrder: 2,
-        approvers: [{ approverType: 'role', value: 'finance-manager' }],
-        slaHours: 72,
-      });
-    }
-
-    // Level 3: CFO for invoices over $10,000
-    if (data.amount > 10_000) {
-      levels.push({
-        levelOrder: 3,
-        approvers: [{ approverType: 'role', value: 'cfo' }],
-        slaHours: 96,
-      });
-    }
-
-    // Level 4: Board approval for invoices over $50,000
-    if (data.amount > 50_000) {
-      levels.push({
-        levelOrder: 4,
-        approvers: [
-          { approverType: 'role', value: 'board-chair' },
-          { approverType: 'role', value: 'board-member' },
-        ],
-        requireAll: false, // Any board member can approve
-        slaHours: 168,
-      });
-    }
-
-    return { levels, mode: 'sequential' };
-  },
+  documentType: 'invoice',
+  // Level 1: department head, always required
+  levels: [
+    {
+      level: 1,
+      name: 'Department head',
+      approvers: [{ type: 'role', role: 'dept-head' }],
+      mode: 'any',
+    },
+  ],
+  // Each rule adds its level when the invoice data matches
+  conditions: [
+    {
+      when: { field: 'amount', operator: '>', value: 1_000 },
+      addLevels: [
+        {
+          level: 2,
+          name: 'Finance manager',
+          approvers: [{ type: 'role', role: 'finance-manager' }],
+          mode: 'any',
+        },
+      ],
+    },
+    {
+      when: { field: 'amount', operator: '>', value: 10_000 },
+      addLevels: [
+        {
+          level: 3,
+          name: 'CFO',
+          approvers: [{ type: 'role', role: 'cfo' }],
+          mode: 'any',
+        },
+      ],
+    },
+    {
+      when: { field: 'amount', operator: '>', value: 50_000 },
+      addLevels: [
+        {
+          level: 4,
+          name: 'Board',
+          approvers: [{ type: 'role', role: 'board-member' }],
+          mode: 'any', // any one board member approves
+        },
+      ],
+    },
+  ],
+  slaDeadlineDays: 7,
 });`);
 
 const submitCode = hl(`// Submit an invoice for approval
@@ -205,15 +198,15 @@ await engine.delegate({
         <span class="section-label-sm">Step 1</span>
         <h2 class="code-heading">Define the template</h2>
         <p class="code-desc">
-          <code>buildChain</code> runs at submission time. It receives the invoice data
-          and <code>tenantId</code>, queries your DB for the right approver, and returns
-          the level array. The chain is immutable after submission.
+          The first level is static. Each entry in <code>conditions</code> tests the
+          invoice <code>data</code> at submission and adds a level when it matches.
+          <code>role</code> approvers are resolved through your <code>orgProvider</code>.
         </p>
         <ul class="code-bullets">
-          <li>Chain built fresh on every <code>engine.submit()</code></li>
-          <li>Amount thresholds add levels dynamically</li>
-          <li>Board level uses <code>requireAll: false</code> — any board member approves</li>
-          <li><code>slaHours</code> triggers escalation if not acted upon</li>
+          <li>Conditions are evaluated on every <code>engine.submit()</code></li>
+          <li>Amount thresholds add levels, so a $500 invoice gets one level and a $60,000 invoice four</li>
+          <li>Board level uses <code>mode: 'any'</code> — any one member approves</li>
+          <li><code>slaDeadlineDays</code> sets the overall SLA; <code>approval:sla_breached</code> fires when it elapses</li>
         </ul>
       </div>
       <div class="code-block">
