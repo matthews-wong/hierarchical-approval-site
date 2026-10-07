@@ -66,7 +66,7 @@ const faqSchema = {
       name: 'How does optimistic locking work in hierarchical-approval?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Every ApprovalInstance carries a version counter. The storage adapter\'s updateInstance() method checks the stored version against the expected version before writing. If they differ (meaning another process modified the instance concurrently), it throws an ApprovalConflictError. The engine retries automatically up to maxAttempts times (default 3) with jittered exponential backoff.',
+        text: 'Every ApprovalInstance carries a version counter. The storage adapter\'s updateInstance() method checks the stored version against the expected version before writing. If they differ (meaning another process modified the instance concurrently), it throws an ApprovalConflictError. The engine retries automatically up to maxAttempts times (default 3) with linear backoff (baseDelayMs times the attempt number) plus random jitter, which is on by default.',
       },
     },
     {
