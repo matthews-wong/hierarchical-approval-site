@@ -2,116 +2,130 @@
 import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
 import { hl } from '../../lib/highlight';
 
-const configCode = hl(`const ExpenseSchema = z.object({
-  employeeId: z.string(),
-  totalAmount: z.number().positive(),
-  currency: z.string().default('USD'),
-  isInternational: z.boolean(),
-  receipts: z.array(z.string()),
-  category: z.enum(['travel', 'meals', 'equipment', 'other']),
-  businessJustification: z.string(),
+const configCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
+import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
+
+const engine = new ApprovalEngine({
+  adapter: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  tenantId: 'acme-corp',
+  // Resolves every { type: 'role' } approver below
+  orgProvider: { getUsersByRole: (role) => directory.usersWithRole(role) },
 });
 
-engine.defineTemplate({
+// Conditions read plain data fields, so convert to USD before submitting
+// and store the result as data.amountUsd (see edge case 03).
+await engine.defineTemplate({
   name: 'expense-report',
-  schema: ExpenseSchema,
-  buildChain: async (data, tenantId) => {
-    // Convert to USD for threshold comparison (locked at submission time)
-    const amountUSD = await fx.convert(data.totalAmount, data.currency, 'USD');
-    const levels = [];
-
-    // Level 1: Direct manager always
-    levels.push({
-      levelOrder: 1,
-      approvers: [{ approverType: 'role', value: 'direct-manager' }],
-      slaHours: 48,
-    });
-
-    // Finance review for amounts over $500
-    if (amountUSD > 500) {
-      levels.push({
-        levelOrder: 2,
-        approvers: [{ approverType: 'role', value: 'finance-controller' }],
-        slaHours: 72,
-      });
-    }
-
-    // CFO sign-off for amounts over $2,000
-    if (amountUSD > 2_000) {
-      levels.push({
-        levelOrder: 3,
-        approvers: [{ approverType: 'role', value: 'cfo' }],
-        slaHours: 96,
-      });
-    }
-
-    // Compliance review for all international expenses
-    if (data.isInternational) {
-      levels.push({
-        levelOrder: levels.length + 1,
-        approvers: [{ approverType: 'role', value: 'compliance-officer' }],
-        slaHours: 72,
-      });
-    }
-
-    return { levels, mode: 'sequential' };
-  },
+  documentType: 'expense',
+  levels: [
+    {
+      level: 1,
+      name: 'Direct manager',
+      approvers: [{ type: 'role', role: 'direct-manager' }],
+      mode: 'any',
+    },
+  ],
+  conditions: [
+    {
+      when: { field: 'amountUsd', operator: '>', value: 500 },
+      addLevels: [
+        {
+          level: 2,
+          name: 'Finance',
+          approvers: [{ type: 'role', role: 'finance-controller' }],
+          mode: 'any',
+        },
+      ],
+    },
+    {
+      when: { field: 'amountUsd', operator: '>', value: 2_000 },
+      addLevels: [
+        {
+          level: 3,
+          name: 'CFO',
+          approvers: [{ type: 'role', role: 'cfo' }],
+          mode: 'any',
+        },
+      ],
+    },
+    {
+      when: { field: 'isInternational', operator: '==', value: true },
+      addLevels: [
+        {
+          level: 4,
+          name: 'Compliance',
+          approvers: [{ type: 'role', role: 'compliance-officer' }],
+          mode: 'any',
+        },
+      ],
+    },
+  ],
 });`);
 
 const dupeCode = hl(`// Detect duplicate expense reports before submitting
-async function detectDuplicate(
-  tenantId: string,
+const DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function isDuplicate(
   employeeId: string,
   category: string,
   totalAmount: number,
   currency: string
 ): Promise<boolean> {
-  const recent = await db.query(
-    \`SELECT id FROM expense_instances
-     WHERE tenant_id = $1
-       AND submitted_by = $2
-       AND data->>'category' = $3
-       AND ABS((data->>'totalAmount')::numeric - $4) < 0.01
-       AND data->>'currency' = $5
-       AND submitted_at > NOW() - INTERVAL '7 days'
-       AND status != 'rejected'\`,
-    [tenantId, employeeId, category, totalAmount, currency]
-  );
-  return recent.rowCount > 0;
+  const recent = await engine.queryInstances({
+    documentType: 'expense',
+    submittedBy: employeeId,
+    fromDate: new Date(Date.now() - DUPLICATE_WINDOW_MS),
+    // Matches instances whose data contains all of these pairs
+    data: { category, totalAmount, currency },
+  });
+  return recent.items.some((instance) => instance.status !== 'rejected');
 }
 
-const isDuplicate = await detectDuplicate(
-  tenantId, employeeId, category, amount, currency
-);
-if (isDuplicate) {
+if (await isDuplicate(employeeId, category, amount, currency)) {
   throw new Error('Duplicate expense report detected within the last 7 days');
 }`);
 
-const receiptCode = hl(`// Validate receipts before allowing submission (IAuthorizationPolicy)
-class ReceiptPolicy implements IAuthorizationPolicy {
-  async authorize(ctx: AuthorizationContext) {
-    if (ctx.operation !== 'submit') return undefined; // only validate on submit
+const receiptCode = hl(`// Hold approval until receipts are attached (IAuthorizationPolicy)
+import { ApprovalEngine } from 'hierarchical-approval';
+import type { IAuthorizationPolicy, AuthorizationContext } from 'hierarchical-approval';
 
-    const { receipts, category, totalAmount } = ctx.instance.data;
-    const requiresReceipt = category !== 'meals' || totalAmount > 25;
+const MEAL_RECEIPT_THRESHOLD_USD = 25;
+
+class ReceiptPolicy implements IAuthorizationPolicy {
+  authorize(ctx: AuthorizationContext): string | undefined {
+    if (ctx.operation !== 'approve') return undefined;
+
+    const { receipts, category, amountUsd } = ctx.instance.data as {
+      receipts: string[];
+      category: string;
+      amountUsd: number;
+    };
+    const requiresReceipt =
+      category !== 'meals' || amountUsd > MEAL_RECEIPT_THRESHOLD_USD;
 
     if (requiresReceipt && receipts.length === 0) {
       return 'Receipt required for this expense category and amount';
     }
-
     return undefined; // allow
   }
 }
 
 const engine = new ApprovalEngine({
-  storage: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  adapter: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  tenantId: 'acme-corp',
   authorizationPolicy: new ReceiptPolicy(),
+});
+
+// approve() now throws ApprovalForbiddenError until the employee attaches them:
+await engine.updateData(instance.id, {
+  updatedBy: 'emp-4821',
+  data: { receipts: ['receipt-001.pdf'] },
 });`);
 ---
 
 <UseCaseLayout
   title="Employee Expense Reimbursement"
-  description="Auto-approve small expenses after manager sign-off. Large or international expenses get Finance and Compliance review. Duplicate detection and receipt validation before the workflow starts."
+  description="Auto-approve small expenses after manager sign-off. Large or international expenses get Finance and Compliance review. Duplicate detection before submit and a receipt check before anyone can approve."
   tag="Finance & HR"
 >
   <section class="uc-hero">
@@ -123,8 +137,8 @@ const engine = new ApprovalEngine({
       <h1 class="uc-title">Employee Expense Reimbursement</h1>
       <p class="uc-sub">
         Small expenses route through manager only. Large ones escalate to Finance and CFO.
-        International expenses always get Compliance review. Currency is locked at submission
-        so FX movements after approval don't change the reimbursement amount.
+        International expenses always get Compliance review. The USD amount is computed once, when you submit,
+        so later FX movements don't change who has to approve.
       </p>
     </div>
   </section>
@@ -185,15 +199,15 @@ const engine = new ApprovalEngine({
         <span class="section-label-sm">Configuration</span>
         <h2 class="code-heading">Amount-tiered chain with FX lock</h2>
         <p class="code-desc">
-          The expense amount is converted to USD <em>at submission time</em> for threshold
-          comparison. The original currency and amount are stored in the instance data.
-          Approvers see the original; thresholds use the locked USD equivalent.
+          Template conditions compare plain data fields, so your code converts the amount to USD
+          <em>before submitting</em> and stores it as <code>amountUsd</code> next to the original
+          currency and amount. Approvers see the original; thresholds use the stored USD value.
         </p>
         <ul class="code-bullets">
-          <li>FX rate locked at submission — no drift after approval</li>
-          <li>International flag adds Compliance as a final gate</li>
+          <li>FX rate applied once by your code, before submit</li>
+          <li>The international flag adds Compliance as the last level</li>
           <li>CFO level only activates above $2k</li>
-          <li>Short meal expenses skip receipt requirement (configurable)</li>
+          <li>Meals up to $25 skip the receipt requirement in the policy below</li>
         </ul>
       </div>
       <div class="code-block">
@@ -229,8 +243,8 @@ const engine = new ApprovalEngine({
             <pre class="code-pre"><code><Fragment set:html={dupeCode} /></code></pre>
           </div>
           <p class="edge-note">
-            Check before <code>engine.submit()</code>. The 7-day window and amount
-            tolerance prevent accidental double-billing.
+            Check before <code>engine.submit()</code>. <code>queryInstances</code> matches the
+            stored <code>data</code> fields exactly, so the 7-day window is the only fuzziness.
           </p>
         </div>
 
@@ -239,7 +253,7 @@ const engine = new ApprovalEngine({
           <h3 class="edge-title">Receipt validation at the boundary</h3>
           <p class="edge-desc">
             An employee submits a $500 equipment expense with no receipts attached.
-            Finance approves it anyway — because there's no enforcement in the workflow itself.
+            Finance approves it anyway — because nothing in the workflow stops them.
           </p>
           <div class="code-block">
             <div class="code-header">
@@ -249,8 +263,9 @@ const engine = new ApprovalEngine({
             <pre class="code-pre"><code><Fragment set:html={receiptCode} /></code></pre>
           </div>
           <p class="edge-note">
-            <code>IAuthorizationPolicy</code> blocks <code>submit</code> if the receipts
-            array is empty for categories that require them. Enforced by the engine — not by the UI.
+            <code>IAuthorizationPolicy</code> denies <code>approve</code> while the receipts
+            array is empty for categories that require them. The engine throws <code>ApprovalForbiddenError</code>,
+            so the rule holds whatever the UI does. The policy is not consulted on <code>submit</code>.
           </p>
         </div>
 
@@ -265,11 +280,11 @@ const engine = new ApprovalEngine({
           <div class="edge-solution">
             <div class="solution-step">
               <span class="step-num">1</span>
-              <span>At <code>engine.submit()</code>, call <code>fx.convert()</code> and store both the original and USD amount in the instance data</span>
+              <span>Before <code>engine.submit()</code>, call <code>fx.convert()</code> and put both the original and the USD amount in <code>data</code></span>
             </div>
             <div class="solution-step">
               <span class="step-num">2</span>
-              <span>Threshold decisions in <code>buildChain</code> use the locked USD amount, not a live rate</span>
+              <span>The template's conditions read <code>data.amountUsd</code>, never a live rate</span>
             </div>
             <div class="solution-step">
               <span class="step-num">3</span>
@@ -277,8 +292,8 @@ const engine = new ApprovalEngine({
             </div>
           </div>
           <p class="edge-note">
-            The chain is built once at submission. Subsequent FX changes don't alter
-            the approval requirements for that instance.
+            The levels are decided when you submit. They only change if you call
+            <code>engine.updateData()</code> with new values, which re-evaluates the conditions.
           </p>
         </div>
       </div>
