@@ -134,8 +134,17 @@
     .nav-menu .nav-link:not(:last-child) { display: none; }
   }
 
+  @media (max-width: 400px) {
+    .nav-menu,
+    .nav-actions .nav-link { display: none; }
+    .nav-inner { gap: 0.75rem; }
+    .nav-logo { font-size: 0.75rem; }
+    .nav-cta { font-size: 0.8125rem; padding: 0.4375rem 0.75rem; }
+  }
+
   @media (max-width: 640px) {
-    .nav-menu { display: none; }
+    .nav-menu,
+    .nav-actions .nav-link { display: none; }
     .nav-link:not(.nav-cta) { display: none; }
   }
 </style>
