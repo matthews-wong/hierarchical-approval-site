@@ -695,9 +695,10 @@ await engine.delegate(instance.id, {
   }
 
   @media (max-width: 860px) {
-    .code-grid, .code-grid.reverse { grid-template-columns: 1fr; }
+    .code-grid, .code-grid.reverse { grid-template-columns: minmax(0, 1fr); }
     .code-grid.reverse .code-meta { order: 0; }
-    .edges-grid { grid-template-columns: 1fr; }
-    .related-grid { grid-template-columns: 1fr; }
+    .edges-grid { grid-template-columns: minmax(0, 1fr); }
+    .code-grid > *, .edge-card { min-width: 0; }
+    .related-grid { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
