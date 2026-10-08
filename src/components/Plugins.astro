@@ -245,6 +245,7 @@ const cards = families.map((f) => ({ ...f, html: hl(f.snippet) }));
   }
 
   .plugin-card {
+    min-width: 0;
     background: var(--surface);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-lg);
@@ -412,7 +413,7 @@ const cards = families.map((f) => ({ ...f, html: hl(f.snippet) }));
   }
 
   @media (max-width: 720px) {
-    .plugin-grid { grid-template-columns: 1fr; }
+    .plugin-grid { grid-template-columns: minmax(0, 1fr); }
     .code-pre { max-height: 220px; overflow-y: auto; }
   }
 </style>
