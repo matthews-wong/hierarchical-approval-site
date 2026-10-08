@@ -381,8 +381,9 @@ app.post('/webhooks/docusign', async (req, res) => {
   .related-name { font-size: 0.9375rem; font-weight: 600; color: var(--accent); }
 
   @media (max-width: 860px) {
-    .code-grid { grid-template-columns: 1fr; }
-    .edges-grid { grid-template-columns: 1fr; }
-    .related-grid { grid-template-columns: 1fr; }
+    .code-grid { grid-template-columns: minmax(0, 1fr); }
+    .edges-grid { grid-template-columns: minmax(0, 1fr); }
+    .code-grid > *, .edge-card { min-width: 0; }
+    .related-grid { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
