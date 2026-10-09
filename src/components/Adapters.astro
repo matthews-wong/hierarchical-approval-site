@@ -1,13 +1,20 @@
 ---
+const TOKEN =
+  /(\/\/.*)|(`(?:[^`\\]|\\.)*`)|('(?:[^'\\]|\\.)*')|\b(async|await|const|class|implements|if|return|new)\b/g;
+
+const TOKEN_CLASSES = ['c', 's', 's', 'k'] as const;
+
+// One pass over the escaped text: a later rule must never run over markup an
+// earlier rule emitted, or `class="c"` gets highlighted as a string.
 function hl(raw: string): string {
   return raw
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/(\/\/.*)/g, '<span class="c">$1</span>')
-    .replace(/(`(?:[^`\\]|\\.)*`)/g, '<span class="s">$1</span>')
-    .replace(/('(?:[^'\\]|\\.)*')/g, '<span class="s">$1</span>')
-    .replace(/\b(async|await|const|class|implements|if|return|new)\b/g, '<span class="k">$1</span>');
+    .replace(TOKEN, (match, ...groups: (string | undefined)[]) => {
+      const index = groups.findIndex((group) => group !== undefined);
+      return `<span class="${TOKEN_CLASSES[index]}">${match}</span>`;
+    });
 }
 
 const adapters = [
