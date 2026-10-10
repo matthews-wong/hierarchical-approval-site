@@ -2,114 +2,92 @@
 import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
 import { hl } from '../../lib/highlight';
 
-const configCode = hl(`// Tenant-configured chains stored in your database
-interface TenantApprovalConfig {
-  tenantId: string;
-  levels: Array<{
-    order: number;
-    approverRoles: string[];
-    requireAll: boolean;
-    slaHours: number;
-  }>;
+const configCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
+import type { ApprovalTemplateConfig } from 'hierarchical-approval';
+import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
+
+// One engine per tenant: tenantId scopes templates and instances.
+// Share the adapter (one pool) across all of them.
+const adapter = new PostgresAdapter({ connectionString: process.env.DATABASE_URL });
+const engines = new Map<string, ApprovalEngine>();
+
+function engineFor(tenantId: string): ApprovalEngine {
+  let engine = engines.get(tenantId);
+  if (!engine) {
+    engine = new ApprovalEngine({
+      adapter,
+      tenantId,
+      // Resolves every { type: 'role' } approver. The engine calls this with
+      // the role only, so close over the tenant here.
+      orgProvider: { getUsersByRole: (role) => directory.usersWithRole(role, tenantId) },
+    });
+    engines.set(tenantId, engine);
+  }
+  return engine;
 }
 
-engine.defineTemplate({
-  name: 'tenant-document-approval',
-  schema: DocumentSchema,
-  buildChain: async (data, tenantId) => {
-    // Load tenant custom chain configuration
-    const config = await db.query(
-      'SELECT * FROM tenant_approval_configs WHERE tenant_id = $1',
-      [tenantId]
-    );
+// The row your admin UI saves for each tenant
+interface TenantApprovalConfig {
+  levels: Array<{ approverRoles: string[]; requireAll: boolean }>;
+}
 
-    if (!config.rows[0]) {
-      // Fallback for unconfigured tenants: single admin approver
-      return {
-        levels: [{
-          levelOrder: 1,
-          approvers: [{ approverType: 'role', value: 'admin' }],
-          slaHours: 48,
-        }],
-        mode: 'sequential',
-      };
-    }
+const FALLBACK_CONFIG: TenantApprovalConfig = {
+  levels: [{ approverRoles: ['admin'], requireAll: false }],
+};
 
-    // Build chain from tenant configuration
-    const levels = config.rows[0].levels.map((level) => ({
-      levelOrder: level.order,
-      approvers: level.approverRoles.map((role) => ({
-        approverType: 'role',
-        value: role,
-      })),
-      requireAll: level.requireAll,
-      slaHours: level.slaHours,
-    }));
+function toTemplate(config: TenantApprovalConfig): ApprovalTemplateConfig {
+  return {
+    name: 'tenant-document-approval',
+    documentType: 'document',
+    levels: config.levels.map((level, index) => ({
+      level: index + 1,
+      name: \`Level \${index + 1}\`,
+      approvers: level.approverRoles.map((role) => ({ type: 'role', role })),
+      mode: level.requireAll ? 'all' : 'any',
+    })),
+  };
+}
 
-    return { levels, mode: 'sequential' };
-  },
-});`);
+// Run when the tenant saves their chain (and once for tenants that never did)
+await engineFor(tenantId).defineTemplate(toTemplate(config ?? FALLBACK_CONFIG));`);
 
 const suspendCode = hl(`// Block new submissions from suspended tenants while
 // allowing existing in-flight approvals to complete
-class TenantSuspensionPolicy implements IAuthorizationPolicy {
-  async authorize(ctx: AuthorizationContext) {
-    // Only block new submissions — not approvals of existing instances
-    if (ctx.operation !== 'submit') return undefined;
-
-    const tenant = await db.query(
-      'SELECT status FROM tenants WHERE id = $1',
-      [ctx.tenantId]
-    );
-
-    if (tenant.rows[0]?.status === 'suspended') {
-      return 'Tenant account is suspended. Contact support to reactivate.';
-    }
-
-    return undefined; // allow
+async function submitDocument(tenantId: string, documentId: string, actorId: string, data: Record<string, unknown>) {
+  const tenant = await db.query(
+    'SELECT status FROM tenants WHERE id = $1',
+    [tenantId]
+  );
+  if (tenant.rows[0]?.status === 'suspended') {
+    throw new Error(\`Tenant \${tenantId} is suspended. Contact support to reactivate.\`);
   }
+
+  return engineFor(tenantId).submit({
+    templateName: 'tenant-document-approval',
+    documentType: 'document',
+    documentId,
+    submittedBy: actorId,
+    data,
+  });
 }
 
-const engine = new ApprovalEngine({
-  storage: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
-  authorizationPolicy: new TenantSuspensionPolicy(),
-});`);
+// approve() and reject() go straight to the engine, so instances that were
+// already in flight finish normally.`);
 
 const validateConfigCode = hl(`// Validate tenant chain config before saving it
-function validateChainConfig(config: TenantApprovalConfig): string | null {
-  if (!config.levels || config.levels.length === 0) {
-    return 'Chain must have at least one level';
-  }
-
-  const orders = config.levels.map(l => l.order);
-  const hasGap = orders.some((o, i) => o !== i + 1);
-  if (hasGap) {
-    return 'Level orders must be sequential starting from 1';
-  }
-
-  const hasDuplicates = new Set(orders).size !== orders.length;
-  if (hasDuplicates) {
-    return 'Duplicate level orders found';
-  }
-
-  for (const level of config.levels) {
-    if (!level.approverRoles || level.approverRoles.length === 0) {
-      return \`Level \${level.order} must have at least one approver role\`;
-    }
-    if (level.slaHours < 1 || level.slaHours > 720) {
-      return \`Level \${level.order} SLA must be between 1 and 720 hours\`;
-    }
-  }
-
-  return null; // valid
+function validateChainConfig(tenantId: string, config: TenantApprovalConfig): string | null {
+  const result = engineFor(tenantId).validateTemplate(toTemplate(config));
+  if (result.valid) return null;
+  return result.errors.map((e) => \`\${e.field}: \${e.message}\`).join('; ');
 }
 
 // In your admin API endpoint:
-const error = validateChainConfig(newConfig);
+const error = validateChainConfig(tenantId, newConfig);
 if (error) {
   return res.status(400).json({ error });
 }
-await db.query(/* upsert config */);`);
+await db.query(/* upsert config */);
+await engineFor(tenantId).updateTemplate(toTemplate(newConfig));`);
 ---
 
 <UseCaseLayout
@@ -125,10 +103,10 @@ await db.query(/* upsert config */);`);
       </div>
       <h1 class="uc-title">Per-Tenant Approval Rules</h1>
       <p class="uc-sub">
-        Every call to <code>engine.submit()</code> passes a <code>tenantId</code>.
-        Your <code>buildChain</code> function reads that tenant's configuration from
-        your database and returns their custom chain. Different tenants, different rules —
-        one engine instance.
+        Each <code>ApprovalEngine</code> is created with a <code>tenantId</code> that scopes
+        its templates and instances. Your admin UI saves a chain per tenant, and you turn
+        it into that tenant's template with <code>defineTemplate()</code>. Different
+        tenants, different rules — one shared storage adapter.
       </p>
     </div>
   </section>
@@ -177,17 +155,17 @@ await db.query(/* upsert config */);`);
     <div class="container code-grid">
       <div class="code-meta">
         <span class="section-label-sm">Configuration</span>
-        <h2 class="code-heading">One template, N tenant configs</h2>
+        <h2 class="code-heading">One engine per tenant, one template per config</h2>
         <p class="code-desc">
-          <code>buildChain</code> receives <code>tenantId</code> as the second argument.
-          Query your <code>tenant_approval_configs</code> table and transform the rows into
-          levels. Tenants that haven't configured a chain get the fallback single-approver chain.
+          Keep a small map of engines keyed by tenant. Transform each tenant's saved
+          config into <code>levels</code> and register it with <code>defineTemplate()</code>.
+          Tenants that haven't configured a chain get a fallback single-approver template.
         </p>
         <ul class="code-bullets">
-          <li>Chain isolated per tenant — no cross-tenant data</li>
+          <li>Templates and instances are scoped to the engine's <code>tenantId</code></li>
           <li>Fallback chain prevents orphan submissions</li>
-          <li>Tenant can update config at any time — in-flight instances use their original chain</li>
-          <li>No engine restart needed when tenant config changes</li>
+          <li>Tenant can update config at any time with <code>updateTemplate()</code> — in-flight instances keep their template snapshot</li>
+          <li>No restart needed when tenant config changes</li>
         </ul>
       </div>
       <div class="code-block">
@@ -223,8 +201,8 @@ await db.query(/* upsert config */);`);
             <pre class="code-pre"><code><Fragment set:html={suspendCode} /></code></pre>
           </div>
           <p class="edge-note">
-            Block <code>submit</code> for suspended tenants; allow <code>approve</code>/<code>reject</code>
-            to complete existing workflows. In-flight approvals resolve cleanly.
+            Check the tenant's status before <code>submit()</code>; leave <code>approve</code>/<code>reject</code>
+            alone so existing workflows complete. In-flight approvals resolve cleanly.
           </p>
         </div>
 
@@ -232,9 +210,9 @@ await db.query(/* upsert config */);`);
           <div class="edge-num">02</div>
           <h3 class="edge-title">Invalid tenant chain configuration</h3>
           <p class="edge-desc">
-            A tenant admin accidentally creates a chain with duplicate level orders or
-            no approvers on a level. The next submission crashes in <code>buildChain</code>
-            with an unhelpful error.
+            A tenant admin accidentally saves a chain with no levels or
+            no approvers on a level. Saving it as the tenant's template would be rejected
+            at <code>defineTemplate()</code>, after the admin has already left the settings page.
           </p>
           <div class="code-block">
             <div class="code-header">
@@ -244,8 +222,9 @@ await db.query(/* upsert config */);`);
             <pre class="code-pre"><code><Fragment set:html={validateConfigCode} /></code></pre>
           </div>
           <p class="edge-note">
-            Validate at save time — not at runtime. Return a human-readable error to the
-            admin UI before the broken config reaches production.
+            Validate at save time with <code>engine.validateTemplate()</code>, which returns
+            every problem without persisting anything. Return the messages to the admin UI
+            before the broken config is saved.
           </p>
         </div>
 
@@ -259,11 +238,11 @@ await db.query(/* upsert config */);`);
           <div class="edge-solution">
             <div class="solution-step">
               <span class="step-num">1</span>
-              <span>The chain is built at <code>engine.submit()</code> time and stored on the instance — config changes don't affect in-flight instances</span>
+              <span><code>engine.submit()</code> stores a snapshot of the template on the instance — <code>updateTemplate()</code> doesn't change in-flight instances</span>
             </div>
             <div class="solution-step">
               <span class="step-num">2</span>
-              <span>New submissions after the config change use the updated chain</span>
+              <span>New submissions after the update use the new template version</span>
             </div>
             <div class="solution-step">
               <span class="step-num">3</span>
@@ -271,8 +250,9 @@ await db.query(/* upsert config */);`);
             </div>
           </div>
           <p class="edge-note">
-            Immutability of the chain after submission is not a limitation — it's the
-            correct behavior. Changing rules mid-workflow would invalidate prior approvals.
+            Each instance keeps the template it was submitted with, so prior approvals stay
+            valid. Note that <code>updateData()</code> can still recompute the remaining levels
+            of an instance from its own template.
           </p>
         </div>
       </div>
