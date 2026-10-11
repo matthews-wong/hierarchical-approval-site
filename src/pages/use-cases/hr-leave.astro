@@ -3,132 +3,127 @@ import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
 import { hl } from '../../lib/highlight';
 
 const configCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
-import { z } from 'zod';
+import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
 
-const LeaveSchema = z.object({
-  employeeId: z.string(),
-  leaveType: z.enum(['annual', 'sick', 'extended', 'emergency']),
-  startDate: z.string(),
-  endDate: z.string(),
-  durationDays: z.number().int().positive(),
+const engine = new ApprovalEngine({
+  adapter: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
+  tenantId: 'acme-corp',
+  // Resolves every { type: 'role' } approver below
+  orgProvider: { getUsersByRole: (role) => directory.usersWithRole(role) },
 });
 
-engine.defineTemplate({
+// A { type: 'dynamic' } approver: look up the submitter's direct manager
+engine.registerResolver('direct-manager', (submittedBy) => hrSystem.managerIdOf(submittedBy));
+
+await engine.defineTemplate({
   name: 'hr-leave',
-  schema: LeaveSchema,
-  buildChain: async (data, tenantId) => {
-    // Emergency leave: auto-approve, HR gets notified but doesn't block
-    if (data.leaveType === 'emergency') {
-      return {
-        levels: [{
-          levelOrder: 1,
-          approvers: [{ approverType: 'role', value: 'hr-admin' }],
-          autoApprove: true,
-        }],
-        mode: 'sequential',
-      };
-    }
-
-    const levels = [];
-
-    // Direct manager always required
-    const { rows } = await db.query(
-      'SELECT manager_id FROM employee_hierarchy WHERE employee_id = $1',
-      [data.employeeId]
-    );
-    levels.push({
-      levelOrder: 1,
-      approvers: [{ approverType: 'user', value: rows[0].manager_id }],
-      slaHours: 24,
-    });
-
-    // Extended leave (> 10 days) also needs department head
-    if (data.durationDays > 10) {
-      levels.push({
-        levelOrder: 2,
-        approvers: [{ approverType: 'role', value: 'department-head' }],
-        slaHours: 48,
-      });
-    }
-
-    // HR reviews all leave except short sick leave (< 3 days)
-    const hrRequired = data.leaveType !== 'sick' || data.durationDays >= 3;
-    if (hrRequired) {
-      levels.push({
-        levelOrder: levels.length + 1,
-        approvers: [{ approverType: 'role', value: 'hr-admin' }],
-        slaHours: 48,
-      });
-    }
-
-    return { levels, mode: 'sequential' };
-  },
+  documentType: 'leave-request',
+  levels: [
+    {
+      level: 1,
+      name: 'Manager',
+      approvers: [{ type: 'dynamic', resolver: 'direct-manager' }],
+      mode: 'any',
+    },
+    {
+      level: 3,
+      name: 'HR',
+      approvers: [{ type: 'role', role: 'hr-admin' }],
+      mode: 'any',
+    },
+  ],
+  conditions: [
+    // Extended leave (> 10 days) adds the department head between the two
+    {
+      when: { field: 'durationDays', operator: '>', value: 10 },
+      addLevels: [
+        {
+          level: 2,
+          name: 'Department head',
+          approvers: [{ type: 'role', role: 'dept-head' }],
+          mode: 'any',
+        },
+      ],
+    },
+    // Short sick leave (< 3 days) skips HR
+    {
+      when: {
+        all: [
+          { field: 'leaveType', operator: '==', value: 'sick' },
+          { field: 'durationDays', operator: '<', value: 3 },
+        ],
+      },
+      skipLevels: [3],
+    },
+    // Emergency leave skips the manager and goes straight to HR
+    {
+      when: { field: 'leaveType', operator: '==', value: 'emergency' },
+      skipLevels: [1],
+    },
+  ],
 });`);
 
-const delegateCode = hl(`// Manager going on leave: set up delegation before they leave
-await engine.delegate({
+const delegateCode = hl(`// Standing cover: consulted whenever a level's approvers are resolved,
+// so a manager who is away is replaced before the request reaches them
+const engine = new ApprovalEngine({
+  adapter,
   tenantId: 'acme-corp',
-  fromActorId: 'manager-alice',
-  toActorId: 'manager-bob', // backup manager
-  validUntil: new Date('2025-09-01'),
+  orgProvider,
+  outOfOfficeProvider: {
+    getDelegateFor: (userId, at) => hrSystem.coverFor(userId, at), // string | null
+  },
 });
 
-// Now when Alice's reports submit leave requests, Bob's
-// engine.approve() call is accepted for those instances.
-// Audit trail: "approved by manager-bob on behalf of manager-alice"`);
+// One-off hand-off of a request that is already waiting on someone
+await engine.delegate(instance.id, {
+  fromApprover: 'manager-bob',
+  toApprover: 'manager-carol',
+  reason: 'Away 2-13 November',
+  until: new Date('2026-11-13'),
+});
 
-const quotaCode = hl(`// Check team leave quota before submitting
-async function checkTeamQuota(
-  tenantId: string,
-  departmentId: string,
-  startDate: string,
-  endDate: string
-): Promise<{ allowed: boolean; onLeaveCount: number }> {
-  // Query approved leave overlapping the requested dates
-  const overlapping = await db.query(
-    \`SELECT COUNT(*) FROM leave_instances
-     WHERE department_id = $1
-       AND status = 'approved'
-       AND start_date < $3
-       AND end_date > $2\`,
-    [departmentId, startDate, endDate]
+// manager-carol can now call engine.approve(instance.id, { approverId: 'manager-carol' })`);
+
+const quotaCode = hl(`// Count approved leave in the same department that overlaps the request
+async function overlappingLeave(departmentId: string, startDate: string, endDate: string) {
+  const { items } = await engine.queryInstances(
+    { documentType: 'leave-request', status: 'approved', data: { departmentId } },
+    { limit: 500, offset: 0 }
   );
-
-  const onLeaveCount = parseInt(overlapping.rows[0].count, 10);
-  const maxConcurrent = await getTeamMaxConcurrent(departmentId);
-
-  return { allowed: onLeaveCount < maxConcurrent, onLeaveCount };
+  // ISO dates compare correctly as strings
+  return items.filter(
+    (leave) => leave.data.startDate < endDate && leave.data.endDate > startDate
+  ).length;
 }
 
 // Call before engine.submit()
-const quota = await checkTeamQuota(tenantId, deptId, startDate, endDate);
-if (!quota.allowed) {
-  throw new Error(\`Team quota exceeded: \${quota.onLeaveCount} already on leave\`);
+const onLeave = await overlappingLeave(departmentId, startDate, endDate);
+if (onLeave >= (await getTeamMaxConcurrent(departmentId))) {
+  throw new Error(\`Team quota exceeded: \${onLeave} already on leave\`);
 }`);
 
-const emergencyCode = hl(`// Emergency leave: submits and resolves in a single call
+const emergencyCode = hl(`// Emergency leave: the manager level is skipped, HR is the only approver
 const instance = await engine.submit({
-  tenantId: 'acme-corp',
   templateName: 'hr-leave',
+  documentType: 'leave-request',
+  documentId: 'leave-2026-0412',
   submittedBy: 'emp-0712',
   data: {
-    employeeId: 'emp-0712',
     leaveType: 'emergency',
-    startDate: '2025-08-07',
-    endDate: '2025-08-07',
+    startDate: '2026-11-02',
+    endDate: '2026-11-02',
     durationDays: 1,
   },
 });
+// instance.status === 'pending', waiting on level 3 (HR) only
 
-// With autoApprove: true on the HR level, the engine
-// immediately advances through all auto-approve levels.
-// instance.status === 'approved'  (synchronous)
-// HR receives an INotificationAdapter event for awareness`);
+await engine.approve(instance.id, { approverId: 'hr-erin' });
+// instance.status === 'approved' — no manager round trip`);
 ---
 
 <UseCaseLayout
   title="HR Leave Request Workflows"
-  description="Type-aware leave approval chains with automatic delegation when the approving manager is themselves on leave. Handles annual, extended, and emergency leave differently."
+  description="Type-aware leave approval chains with out-of-office cover when the approving manager is themselves on leave. Handles annual, extended, and emergency leave differently."
   tag="HR Systems"
 >
   <section class="uc-hero">
@@ -140,8 +135,8 @@ const instance = await engine.submit({
       <h1 class="uc-title">HR Leave Request Workflows</h1>
       <p class="uc-sub">
         One template handles annual, sick, extended, and emergency leave — each with a different
-        chain. Emergency leave auto-approves instantly while HR is notified. Extended leave
-        adds department head sign-off. Delegation covers manager absences.
+        chain. Emergency leave skips the manager and goes straight to HR. Extended leave
+        adds department head sign-off. An out-of-office provider covers manager absences.
       </p>
     </div>
   </section>
@@ -175,7 +170,7 @@ const instance = await engine.submit({
         <div class="chain-row">
           <span class="chain-type">Emergency</span>
           <div class="chain-flow">
-            <div class="cf-node cf-auto"><span class="cf-name">HR Admin</span><span class="cf-badge cf-auto-badge">auto</span></div>
+            <div class="cf-node cf-always"><span class="cf-name">HR Admin</span></div>
             <span class="cf-arrow">→</span>
             <div class="cf-node cf-done"><span class="cf-name">Approved</span></div>
           </div>
@@ -190,14 +185,14 @@ const instance = await engine.submit({
         <span class="section-label-sm">Configuration</span>
         <h2 class="code-heading">One template, four leave types</h2>
         <p class="code-desc">
-          The <code>leaveType</code> field drives the chain logic in <code>buildChain</code>.
-          Emergency leave uses <code>autoApprove: true</code> so it resolves immediately
-          while still firing the notification adapter.
+          The template has a manager level and an HR level; <code>conditions</code> read
+          <code>leaveType</code> and <code>durationDays</code> from the request data to add
+          the department head level or skip levels.
         </p>
         <ul class="code-bullets">
           <li>Short sick leave skips HR (under 3 days, manager only)</li>
           <li>Extended leave adds dept head between manager and HR</li>
-          <li>Emergency resolves synchronously — no waiting</li>
+          <li>Emergency leave skips the manager and waits on HR only</li>
           <li>All leave types maintain a full audit trail</li>
         </ul>
       </div>
@@ -220,7 +215,7 @@ const instance = await engine.submit({
       <div class="edges-grid">
         <div class="edge-card">
           <div class="edge-num">01</div>
-          <h3 class="edge-title">Manager is on leave — auto-delegation</h3>
+          <h3 class="edge-title">Manager is on leave — out-of-office cover</h3>
           <p class="edge-desc">
             An employee submits leave, but their manager is also on leave.
             Without delegation, the request sits unreviewed until the manager returns —
@@ -234,8 +229,9 @@ const instance = await engine.submit({
             <pre class="code-pre"><code><Fragment set:html={delegateCode} /></code></pre>
           </div>
           <p class="edge-note">
-            Managers set up delegation before going on leave. All in-flight and
-            new requests route to the delegate automatically.
+            The <code>outOfOfficeProvider</code> is asked for a stand-in whenever a level's
+            approvers are resolved, so absence stays in your HR system. For a request already
+            waiting, <code>engine.delegate()</code> hands it to someone else.
           </p>
         </div>
 
@@ -254,8 +250,8 @@ const instance = await engine.submit({
             <pre class="code-pre"><code><Fragment set:html={quotaCode} /></code></pre>
           </div>
           <p class="edge-note">
-            Run a pre-submission check against your DB. Block before calling
-            <code>engine.submit()</code> — keeps the workflow clean.
+            Query approved leave with <code>engine.queryInstances()</code> and block before
+            calling <code>engine.submit()</code>. The quota itself is your rule, not the engine's.
           </p>
         </div>
 
@@ -274,8 +270,8 @@ const instance = await engine.submit({
             <pre class="code-pre"><code><Fragment set:html={emergencyCode} /></code></pre>
           </div>
           <p class="edge-note">
-            <code>autoApprove: true</code> resolves synchronously. The employee gets
-            instant confirmation; HR gets notified for record-keeping.
+            The employee skips the manager level, so the request waits only on HR.
+            There is no auto-approve: HR still makes the call.
           </p>
         </div>
       </div>
