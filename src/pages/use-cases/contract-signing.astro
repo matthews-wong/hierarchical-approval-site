@@ -2,120 +2,85 @@
 import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
 import { hl } from '../../lib/highlight';
 
-const configCode = hl(`const ContractSchema = z.object({
-  contractId: z.string(),
-  counterpartyId: z.string(),
-  totalValue: z.number(),
-  durationMonths: z.number(),
-  contractType: z.enum(['vendor', 'customer', 'partnership', 'employment']),
-  requiresCounterSignature: z.boolean(),
-  isAmendment: z.boolean().default(false),
-  originalContractId: z.string().optional(),
-});
+const configCode = hl(`// The counterparty's signer comes from the contract data
+engine.registerResolver('counterparty-signatory', (_submittedBy, data) => String(data.counterpartySignerId));
 
-engine.defineTemplate({
+const totalValue = (min: number) => ({ field: 'totalValue', operator: '>', value: min });
+
+await engine.defineTemplate({
   name: 'contract-signing',
-  schema: ContractSchema,
-  buildChain: async (data, tenantId) => {
-    const levels = [];
-
-    // Level 1: Department head initiates
-    levels.push({
-      levelOrder: 1,
-      approvers: [{ approverType: 'role', value: 'department-head' }],
-      slaHours: 72,
-    });
-
-    // Level 2: Legal review always required
-    levels.push({
-      levelOrder: 2,
-      approvers: [
-        { approverType: 'role', value: 'legal-counsel' },
-        { approverType: 'role', value: 'legal-reviewer' },
+  documentType: 'contract',
+  levels: [
+    { level: 1, name: 'Department head', approvers: [{ type: 'role', role: 'department-head' }], mode: 'any' },
+    // Legal review is part of every chain; either counsel can clear it
+    {
+      level: 2,
+      name: 'Legal',
+      approvers: [{ type: 'role', role: 'legal-counsel' }, { type: 'role', role: 'legal-reviewer' }],
+      mode: 'any',
+    },
+  ],
+  conditions: [
+    // Finance for high-value or long-duration contracts
+    {
+      when: { any: [totalValue(50_000), { field: 'durationMonths', operator: '>', value: 24 }] },
+      addLevels: [{ level: 3, name: 'CFO', approvers: [{ type: 'role', role: 'cfo' }], mode: 'any' }],
+    },
+    // Board for very high-value contracts: both must sign
+    {
+      when: totalValue(250_000),
+      addLevels: [
+        {
+          level: 4,
+          name: 'Board',
+          approvers: [{ type: 'role', role: 'ceo' }, { type: 'role', role: 'board-chair' }],
+          mode: 'all',
+        },
       ],
-      requireAll: false, // Either legal approver can clear it
-      slaHours: 120,
-    });
-
-    // Level 3: Finance for high-value or long-duration contracts
-    if (data.totalValue > 50_000 || data.durationMonths > 24) {
-      levels.push({
-        levelOrder: 3,
-        approvers: [{ approverType: 'role', value: 'cfo' }],
-        slaHours: 96,
-      });
-    }
-
-    // Level 4: Board for very high-value contracts
-    if (data.totalValue > 250_000) {
-      levels.push({
-        levelOrder: 4,
-        approvers: [
-          { approverType: 'role', value: 'ceo' },
-          { approverType: 'role', value: 'board-chair' },
-        ],
-        requireAll: true, // Both CEO and board chair must sign
-        slaHours: 168,
-      });
-    }
-
-    return { levels, mode: 'sequential' };
-  },
+    },
+    // The counterparty signs last
+    {
+      when: { field: 'requiresCounterSignature', operator: '==', value: true },
+      addLevels: [
+        { level: 5, name: 'Counterparty', approvers: [{ type: 'dynamic', resolver: 'counterparty-signatory' }], mode: 'any' },
+      ],
+    },
+  ],
 });`);
 
-const amendmentCode = hl(`// Amendment restarts the approval chain with the new value
-async function submitAmendment(
-  tenantId: string,
-  originalInstanceId: string,
-  amendedData: ContractData
-) {
-  // Close the original instance
-  await engine.reject({
-    tenantId,
-    instanceId: originalInstanceId,
-    actorId: 'system',
-    comment: 'Superseded by amendment',
+const amendmentCode = hl(`// Withdraw the in-flight contract, then submit the amended one
+async function submitAmendment(original: Contract, amended: Contract) {
+  await engine.cancel(original.instanceId, {
+    cancelledBy: amended.submittedBy,
+    reason: 'Superseded by amendment',
   });
 
-  // Submit new instance for the amended contract
-  const amendedInstance = await engine.submit({
-    tenantId,
+  // The new instance evaluates the conditions against the amended value:
+  // 45k -> 60k adds the CFO level
+  return engine.submit({
     templateName: 'contract-signing',
-    submittedBy: amendedData.submittedBy,
-    data: {
-      ...amendedData,
-      isAmendment: true,
-      originalContractId: originalInstanceId,
-    },
+    documentType: 'contract',
+    documentId: \`\${original.contractId}-A1\`,
+    submittedBy: amended.submittedBy,
+    data: { ...amended.data, isAmendment: true, originalContractId: original.contractId },
   });
-
-  // If the amended value crosses a new threshold, extra levels are added automatically
-  // e.g., original $45k → amended $60k now requires CFO sign-off
-  return amendedInstance;
 }`);
 
-const counterSignCode = hl(`// Receive counter-signature via webhook from DocuSign / Adobe Sign
+const counterSignCode = hl(`// Receive the counter-signature from DocuSign / Adobe Sign
 app.post('/webhooks/docusign', async (req, res) => {
   const { envelopeId, status, signerEmail } = req.body;
+  if (status !== 'completed') return res.sendStatus(200);
 
-  if (status !== 'completed') {
-    return res.sendStatus(200);
-  }
-
-  // Look up which approval instance this envelope belongs to
-  const mapping = await db.query(
-    'SELECT instance_id, tenant_id FROM contract_envelopes WHERE envelope_id = $1',
+  // Your own table maps the envelope to the approval instance
+  const { instance_id } = (await db.query(
+    'SELECT instance_id FROM contract_envelopes WHERE envelope_id = $1',
     [envelopeId]
-  );
+  )).rows[0];
 
-  const { instance_id, tenant_id } = mapping.rows[0];
-
-  // Record the external counter-signature as an approval
-  await engine.approve({
-    tenantId: tenant_id,
-    instanceId: instance_id,
-    actorId: \`external:\${signerEmail}\`,
-    comment: \`Counter-signed via DocuSign by \${signerEmail}\`,
+  // signerEmail must match the id the resolver returned: \`external:\${email}\`
+  await engine.approve(instance_id, {
+    approverId: \`external:\${signerEmail}\`,
+    comment: \`Counter-signed via DocuSign envelope \${envelopeId}\`,
   });
 
   res.sendStatus(200);
@@ -124,7 +89,7 @@ app.post('/webhooks/docusign', async (req, res) => {
 
 <UseCaseLayout
   title="Contract Approval Pipeline"
-  description="Legal review before every contract execution. High-value contracts add Finance and board levels. Amendments to approved contracts restart the chain automatically."
+  description="Legal review before every contract execution. High-value contracts add Finance and board levels. Amendments are resubmitted, so the chain is evaluated again against the new value."
   tag="Legal"
 >
   <section class="uc-hero">
@@ -193,15 +158,15 @@ app.post('/webhooks/docusign', async (req, res) => {
         <h2 class="code-heading">Legal always gates execution</h2>
         <p class="code-desc">
           Legal review is a fixed level 2 in every contract chain. It uses
-          <code>requireAll: false</code> — either counsel or reviewer can clear it.
-          Board-level contracts use <code>requireAll: true</code> — both CEO and board
+          <code>mode: 'any'</code> — either counsel or reviewer can clear it.
+          Board-level contracts use <code>mode: 'all'</code> — both CEO and board
           chair must sign.
         </p>
         <ul class="code-bullets">
           <li>Legal review cannot be skipped for any contract type</li>
           <li>High-value or long-term adds CFO automatically</li>
-          <li>Board approval requires both signatories (requireAll: true)</li>
-          <li>SLA tracked at every level — legal gets 5 days</li>
+          <li>Board approval requires both signatories (mode: 'all')</li>
+          <li>The counterparty's signature is a final level, resolved from the contract data</li>
         </ul>
       </div>
       <div class="code-block">
@@ -225,7 +190,7 @@ app.post('/webhooks/docusign', async (req, res) => {
           <div class="edge-num">01</div>
           <h3 class="edge-title">Amendment restarts the chain</h3>
           <p class="edge-desc">
-            A $45k contract is approved. The vendor negotiates an extension to $60k.
+            A $45k contract is in approval. The vendor negotiates an extension to $60k.
             The amendment crosses the CFO threshold — it needs a new approval chain,
             not just a note on the old one.
           </p>
@@ -237,8 +202,9 @@ app.post('/webhooks/docusign', async (req, res) => {
             <pre class="code-pre"><code><Fragment set:html={amendmentCode} /></code></pre>
           </div>
           <p class="edge-note">
-            The original instance is closed as <code>superseded</code>. The audit trail
-            links them via <code>originalContractId</code>. New thresholds apply to the amended value.
+            The original instance ends as <code>cancelled</code> with the reason in its audit trail.
+            The new instance carries <code>originalContractId</code> in its data, and the
+            thresholds apply to the amended value.
           </p>
         </div>
 
@@ -258,8 +224,9 @@ app.post('/webhooks/docusign', async (req, res) => {
             <pre class="code-pre"><code><Fragment set:html={counterSignCode} /></code></pre>
           </div>
           <p class="edge-note">
-            Use a synthetic <code>actorId</code> prefixed with <code>external:</code>.
-            The audit trail records who signed externally, keeping compliance records accurate.
+            The counterparty is an approver like any other: the resolver returns an id
+            prefixed with <code>external:</code>, and the webhook approves as that id.
+            The audit trail records who signed externally.
           </p>
         </div>
 
@@ -273,11 +240,11 @@ app.post('/webhooks/docusign', async (req, res) => {
           <div class="edge-solution">
             <div class="solution-step">
               <span class="step-num">1</span>
-              <span>Legal team sets a <code>hold</code> flag on the instance in your DB</span>
+              <span>Legal sets a <code>hold</code> flag on the contract in your DB</span>
             </div>
             <div class="solution-step">
               <span class="step-num">2</span>
-              <span>Implement <code>IAuthorizationPolicy.authorize()</code> to return a blocking message when the hold flag is set</span>
+              <span>Pass an <code>authorizationPolicy</code> whose <code>authorize()</code> returns a message for <code>approve</code> while the hold flag is set</span>
             </div>
             <div class="solution-step">
               <span class="step-num">3</span>
@@ -285,8 +252,9 @@ app.post('/webhooks/docusign', async (req, res) => {
             </div>
           </div>
           <p class="edge-note">
-            <code>IAuthorizationPolicy</code> is called on every operation. Returning a non-null string
-            blocks the action with that message — without corrupting the instance state.
+            <code>IAuthorizationPolicy</code> is called on approve, reject and the other level actions.
+            Returning a non-empty string denies the call with an <code>ApprovalForbiddenError</code>
+            carrying that message, and the instance is left unchanged.
           </p>
         </div>
       </div>
