@@ -11,15 +11,19 @@ const STACKBLITZ =
   'https://stackblitz.com/github/matthews-wong/hierarchical-approval/tree/main/examples/playground?embed=1&file=index.mjs&view=editor&hideNavigation=1';
 
 // Rendered via set:html so the literal braces aren't parsed as Astro expressions.
-const configHtml = `engine.defineTemplate({
+const configHtml = `await engine.defineTemplate({
   name: <span class="s">'Purchase Order'</span>,
+  documentType: <span class="s">'purchase_order'</span>,
   levels: [
-    { level: <span class="n">1</span>, name: <span class="s">'Line Manager'</span>, mode: <span class="s">'any'</span> },
-    { level: <span class="n">2</span>, name: <span class="s">'Finance'</span>,      mode: <span class="s">'any'</span> },
+    { level: <span class="n">1</span>, name: <span class="s">'Line Manager'</span>, mode: <span class="s">'any'</span>,
+      approvers: [{ type: <span class="s">'user'</span>, userId: <span class="s">'manager_alice'</span> }] },
+    { level: <span class="n">2</span>, name: <span class="s">'Finance'</span>, mode: <span class="s">'any'</span>,
+      approvers: [{ type: <span class="s">'user'</span>, userId: <span class="s">'finance_bob'</span> }] },
   ],
   conditions: [{
     when: { field: <span class="s">'amount'</span>, operator: <span class="s">'&gt;'</span>, value: <span class="n">10_000</span> },
-    addLevels: [{ level: <span class="n">3</span>, name: <span class="s">'CFO'</span>, mode: <span class="s">'any'</span> }],
+    addLevels: [{ level: <span class="n">3</span>, name: <span class="s">'CFO'</span>, mode: <span class="s">'any'</span>,
+      approvers: [{ type: <span class="s">'user'</span>, userId: <span class="s">'cfo_carol'</span> }] }],
   }],
 });`;
 ---
