@@ -1,4 +1,7 @@
 ---
+import pkg from '../../package.json';
+
+const libraryVersion = pkg.devDependencies['hierarchical-approval'];
 ---
 
 <footer class="footer" role="contentinfo">
@@ -47,7 +50,7 @@
 
     <div class="footer-bottom">
       <span>© <span class="footer-year"></span> Matthews Wong — MIT License</span>
-      <span class="footer-version">v0.1.1</span>
+      <span class="footer-version">v{libraryVersion}</span>
     </div>
   </div>
 </footer>
