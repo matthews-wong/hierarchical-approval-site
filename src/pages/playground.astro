@@ -7,8 +7,13 @@ const title = 'Interactive Playground — hierarchical-approval';
 const description =
   'Try the hierarchical-approval engine in your browser: build a multi-level purchase-order approval chain, approve or reject each level, and watch the immutable audit trail — then run the real engine on StackBlitz.';
 
-const STACKBLITZ =
-  'https://stackblitz.com/github/matthews-wong/hierarchical-approval/tree/main/examples/playground?embed=1&file=index.mjs&view=editor&hideNavigation=1';
+import pkg from '../../package.json';
+
+// Pinned to the release tag so the embedded example matches the documented version.
+const PINNED_VERSION = pkg.devDependencies['hierarchical-approval'];
+const STACKBLITZ_BASE = `https://stackblitz.com/github/matthews-wong/hierarchical-approval/tree/v${PINNED_VERSION}/examples/playground`;
+const STACKBLITZ = `${STACKBLITZ_BASE}?embed=1&file=index.mjs&view=editor&hideNavigation=1`;
+const STACKBLITZ_FULL = `${STACKBLITZ_BASE}?file=index.mjs`;
 
 // Rendered via set:html so the literal braces aren't parsed as Astro expressions.
 const configHtml = `await engine.defineTemplate({
@@ -98,7 +103,7 @@ const configHtml = `await engine.defineTemplate({
 
         <div class="pg-real-actions">
           <a class="pg-btn pg-btn-primary" href="https://npm.runkit.com/hierarchical-approval" target="_blank" rel="noopener noreferrer">▶ Run on RunKit</a>
-          <a class="pg-btn" href="https://stackblitz.com/github/matthews-wong/hierarchical-approval/tree/main/examples/playground?file=index.mjs" target="_blank" rel="noopener noreferrer">Open full playground on StackBlitz ↗</a>
+          <a class="pg-btn" href={STACKBLITZ_FULL} target="_blank" rel="noopener noreferrer">Open full playground on StackBlitz ↗</a>
         </div>
 
         <div class="pg-embed">
