@@ -59,9 +59,9 @@ await engine.defineTemplate({
     num: '02',
     label: 'submit.ts',
     title: 'Submit a document',
-    desc: 'Conditions are evaluated once at submit time. The engine builds the exact approval chain for this document. Submitting the same document twice returns the existing instance — idempotency built in.',
+    desc: 'Conditions are evaluated at submit time, and the engine builds the exact approval chain for this document. Editing the data later with updateData() re-evaluates only the levels not yet reached. Submitting the same document twice returns the existing instance — idempotency built in.',
     bullets: [
-      'Chain is immutable after submission',
+      'Levels already reached stay frozen',
       'Duplicate submits return the same instance',
       'Audit entry created automatically',
     ],
