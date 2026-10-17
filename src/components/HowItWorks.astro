@@ -86,6 +86,7 @@ await engine.defineTemplate({
       'Optimistic locking on every write',
       'CONFLICT thrown on concurrent approvals',
       'Events fired after every state change',
+      'getOpenLevels() reports what it is waiting on',
     ],
     code: hl(`// Listen for completion before the last approval lands
 engine.on('approval:completed', (inst) => {
@@ -99,8 +100,12 @@ await engine.approve(instance.id, {
   comment: 'Looks good',
 });
 
+// The levels still collecting decisions: the approval frontier
+await engine.getOpenLevels(instance.id); // [2]
+
 // Finance approves — instance status is now 'approved'
-await engine.approve(instance.id, { approverId: 'fin-1' });`),
+await engine.approve(instance.id, { approverId: 'fin-1' });
+await engine.getOpenLevels(instance.id); // [] once terminal`),
   },
 ];
 ---
