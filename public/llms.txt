@@ -7,6 +7,7 @@
 `hierarchical-approval` solves multi-level approval chains for enterprise applications without requiring BPMN, external orchestrators, or bespoke hand-rolled logic. It handles:
 
 - Sequential and parallel approval chains with configurable modes (any / all / majority)
+- Explicit approval frontier: `ApprovalInstance.openLevels` lists every level collecting decisions (several inside a parallel group), and `engine.getOpenLevels(id)` returns it; `currentLevel` is derived as the lowest open level
 - Conditional routing: levels activate or skip based on document data at submit time
 - Optimistic locking with retry policies to prevent concurrent-approval race conditions
 - Built-in idempotency: submitting the same document twice returns the existing instance
