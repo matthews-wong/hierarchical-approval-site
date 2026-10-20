@@ -197,6 +197,14 @@ const articleSchema = {
           Both are first-class — and both are recorded.
         </p>
         <pre class="guide-code"><code set:html={delegateCode}></code></pre>
+        <p>
+          By default a rejection that fails its level fails the whole instance
+          (<code>returnTo: 'originator'</code>). Pass <code>returnTo: 'previous'</code> to reset
+          the levels after the prior one and replay from there instead. When the rejected level is
+          one branch of a parallel group, "previous" steps back past the whole group, not into a
+          sibling branch. It throws a validation error if the failing level is the first in the
+          chain.
+        </p>
 
         <h2>The audit trail (and why locking matters)</h2>
         <p>
