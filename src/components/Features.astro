@@ -48,6 +48,12 @@ const features = [
     desc: 'Notification, Audit, Metrics, Scheduler, Authorization, Middleware — each a typed interface. Notification and audit failures are logged and swallowed; an authorization policy can deny an operation.',
     color: '#c2410c', colorBg: '#fff7ed',
   },
+  {
+    icon: `<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M8 6h4a4 4 0 0 1 4 4v0M8 18h4a4 4 0 0 0 4-4v0"/>`,
+    title: 'Explicit approval frontier',
+    desc: 'instance.openLevels lists every level collecting decisions; engine.getOpenLevels(id) returns it, and it is empty once the instance is terminal. currentLevel is only the lowest of them, so inside a parallel group use openLevels to decide who may act.',
+    color: '#0f766e', colorBg: '#f0fdfa',
+  },
 ];
 ---
 
