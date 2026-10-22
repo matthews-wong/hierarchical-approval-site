@@ -74,6 +74,24 @@ await engine.delegate(po.id, {
 // Or reject and stop the chain (only an approver of the open level can):
 await engine.reject(po.id, { approverId: 'finance_charlie', reason: 'Not in this quarter budget' });`);
 
+const previewCode = hl(`// Why does a $25,000 order have a CFO level?
+const why = await engine.explainChain('Purchase Order', { amount: 25_000 }, 'employee_jane');
+// why.levels[2] → { level: 3, name: 'CFO', source: 'condition', addedByRule: 0, ... }
+// why.rules     → [{ index: 0, matched: true, addsLevels: [3], skipsLevels: [] }]
+
+// What happens if the CFO says no? Nothing is stored and nobody is notified.
+const dryRun = await engine.simulate({
+  templateName: 'Purchase Order',
+  data: { amount: 25_000 },
+  submittedBy: 'employee_jane',
+  decisions: [
+    { approve: 'manager_alice' },
+    { approve: 'finance_bob' },
+    { reject: 'cfo_carol', reason: 'Over budget' },
+  ],
+});
+// dryRun.finalStatus → 'rejected'; dryRun.transcript has one step per decision`);
+
 const auditCode = hl(`const history = await engine.getHistory(po.id);
 // [
 //   { action: 'submitted', actorId: 'employee_jane', level: 1, timestamp: ... },
@@ -205,6 +223,18 @@ const articleSchema = {
           sibling branch. It throws a validation error if the failing level is the first in the
           chain.
         </p>
+
+        <h2>Preview a chain before you submit it</h2>
+        <p>
+          <code>explainChain()</code> answers "why does this order have a CFO level?": it lists the
+          levels the document would get, which rule added or skipped each one, and every rule in the
+          template, matched or not. <code>simulate()</code> plays scripted approve and reject
+          decisions through the template on a private in-memory store, so your storage, audit log
+          and notification adapters are never touched. A refused decision (wrong approver, wrong
+          level) ends the run and is reported in the transcript instead of being thrown. Neither
+          call writes anything, so both are safe behind a support screen.
+        </p>
+        <pre class="guide-code"><code set:html={previewCode}></code></pre>
 
         <h2>The audit trail (and why locking matters)</h2>
         <p>
