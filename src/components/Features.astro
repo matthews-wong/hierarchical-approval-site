@@ -54,6 +54,12 @@ const features = [
     desc: 'instance.openLevels lists every level collecting decisions; engine.getOpenLevels(id) returns it, and it is empty once the instance is terminal. currentLevel is only the lowest of them, so inside a parallel group use openLevels to decide who may act.',
     color: '#0f766e', colorBg: '#f0fdfa',
   },
+  {
+    icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>`,
+    title: 'Workload and hand-over',
+    desc: 'engine.getWorkload() reports who holds open levels, how many are overdue or on hold, and how old the oldest is. engine.transferApprovals() moves one person\'s queue to another through reassign(), with dryRun to preview. The sweep is not atomic: failures are listed per instance.',
+    color: '#b45309', colorBg: '#fffbeb',
+  },
 ];
 ---
 
