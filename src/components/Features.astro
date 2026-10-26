@@ -60,6 +60,12 @@ const features = [
     desc: 'engine.getWorkload() reports who holds open levels, how many are overdue or on hold, and how old the oldest is. engine.transferApprovals() moves one person\'s queue to another through reassign(), with dryRun to preview. The sweep is not atomic: failures are listed per instance.',
     color: '#b45309', colorBg: '#fffbeb',
   },
+  {
+    icon: `<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>`,
+    title: 'Comment threads',
+    desc: 'engine.addComment() takes an optional parentCommentId to reply and mentions to address people; approval:commented goes to the mentioned users, not the whole level. engine.getComments() returns a flat list, oldest first, so you build threads only if your UI wants them. Comments are still written to the audit trail.',
+    color: '#4338ca', colorBg: '#eef2ff',
+  },
 ];
 ---
 
