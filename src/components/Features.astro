@@ -66,6 +66,12 @@ const features = [
     desc: 'engine.addComment() takes an optional parentCommentId to reply and mentions to address people; approval:commented goes to the mentioned users, not the whole level. engine.getComments() returns a flat list, oldest first, so you build threads only if your UI wants them. Comments are still written to the audit trail.',
     color: '#4338ca', colorBg: '#eef2ff',
   },
+  {
+    icon: `<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>`,
+    title: 'Retention purge',
+    desc: 'engine.purgeInstances({ olderThan, statuses, documentType, limit, dryRun }) permanently removes finished approvals, audit rows included, and a whole sub-workflow family goes together. Passing a pending status is rejected, not skipped. It needs an adapter that implements the optional deleteInstance; without one a real purge throws.',
+    color: '#be123c', colorBg: '#fff1f2',
+  },
 ];
 ---
 
