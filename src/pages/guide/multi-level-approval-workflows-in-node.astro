@@ -74,6 +74,20 @@ await engine.delegate(po.id, {
 // Or reject and stop the chain (only an approver of the open level can):
 await engine.reject(po.id, { approverId: 'finance_charlie', reason: 'Not in this quarter budget' });`);
 
+const escalationCode = hl(`await engine.defineTemplate({
+  name: 'Purchase Order',
+  documentType: 'purchase_order',
+  levels: [
+    // The level decides when the first rung fires; the ladder decides who is added.
+    { level: 1, name: 'Line Manager', approvers: [{ type: 'user', userId: 'manager_alice' }], mode: 'any', escalationAfterDays: 2 },
+  ],
+  escalationSteps: [
+    { afterDays: 2, escalateTo: { type: 'user', userId: 'director_dana' } },
+    { afterDays: 4, escalateTo: { type: 'user', userId: 'vp_victor' } },
+    { afterDays: 7, escalateTo: { type: 'role', role: 'exec' } },
+  ],
+});`);
+
 const previewCode = hl(`// Why does a $25,000 order have a CFO level?
 const why = await engine.explainChain('Purchase Order', { amount: 25_000 }, 'employee_jane');
 // why.levels[2] → { level: 3, name: 'CFO', source: 'condition', addedByRule: 0, ... }
@@ -235,6 +249,19 @@ const articleSchema = {
           call writes anything, so both are safe behind a support screen.
         </p>
         <pre class="guide-code"><code set:html={previewCode}></code></pre>
+
+        <h2>Escalate a stalled approval, more than once</h2>
+        <p>
+          <code>escalationSteps</code> is a ladder of rungs that fire in order of delay. Each rung
+          adds an approver to the open level; nobody is removed, so escalation widens the pool
+          instead of handing the work over. Delays count from when the level opened, not from the
+          previous rung, and a rung takes <code>afterHours</code> instead of
+          <code>afterDays</code> if you configure a working-hours calendar. When both are set, the
+          ladder takes precedence over the single-step <code>escalation</code>, and an in-flight
+          approval keeps the ladder it was submitted under. The escalation scheduler
+          fires the next rung once a level is due.
+        </p>
+        <pre class="guide-code"><code set:html={escalationCode}></code></pre>
 
         <h2>The audit trail (and why locking matters)</h2>
         <p>
