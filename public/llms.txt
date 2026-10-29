@@ -17,6 +17,7 @@
 - Immutable audit trail with old/new state diff on every mutation
 - SLA deadline tracking with automatic `approval:sla_breached` events
 - Escalation: automatic and manual escalation with delegation and time-limited proxying
+- Escalation ladders: `escalationSteps` fire in order of delay, each adding another approver to the level (takes precedence over a single `escalation`)
 - Override: bypass remaining levels (when `allowOverride: true` in the template)
 - Multi-tenancy: every adapter call is scoped by `tenantId`
 - ApprovalTestKit + ManualClock for deterministic, zero-I/O test suites
