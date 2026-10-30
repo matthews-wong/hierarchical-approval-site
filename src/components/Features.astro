@@ -72,6 +72,12 @@ const features = [
     desc: 'engine.purgeInstances({ olderThan, statuses, documentType, limit, dryRun }) permanently removes finished approvals, audit rows included, and a whole sub-workflow family goes together. Passing a pending status is rejected, not skipped. It needs an adapter that implements the optional deleteInstance; without one a real purge throws.',
     color: '#be123c', colorBg: '#fff1f2',
   },
+  {
+    icon: `<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>`,
+    title: 'Deadlines in working hours',
+    desc: 'escalationAfterHours on a level and slaDeadlineHours on a template take hours instead of days, and cannot be combined with the day-based options. Pass calendar: businessHoursCalendar({ workdayStartHour, workdayEndHour, weekendDays, holidays }) to the engine and the clock only runs inside the working window. With weekendCalendar(), which counts whole days only, hour deadlines fall back to elapsed clock time.',
+    color: '#0e7490', colorBg: '#ecfeff',
+  },
 ];
 ---
 
