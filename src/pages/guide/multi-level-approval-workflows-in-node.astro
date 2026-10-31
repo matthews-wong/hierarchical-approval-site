@@ -144,6 +144,15 @@ export class InvoiceService {
   }
 }`);
 
+const bundleCode = hl(`// Author in a sandbox, promote to production.
+const bundle = await sandbox.exportTemplates(['Purchase Order']);
+
+// Report what would change before writing anything.
+const preview = await production.importTemplates(bundle, { mode: 'upsert', dryRun: true });
+console.log(preview.created, preview.updated, preview.errors);
+
+await production.importTemplates(bundle, { mode: 'upsert' });`);
+
 const pgCode = hl(`import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
 
 const adapter = new PostgresAdapter({ connectionString: process.env.DATABASE_URL });
@@ -294,6 +303,22 @@ const articleSchema = {
           <code>PostgresAdapter</code> — the engine code doesn't change, only the adapter.
         </p>
         <pre class="guide-code"><code set:html={pgCode}></code></pre>
+
+        <h2>Promote templates between environments</h2>
+        <p>
+          <code>exportTemplates()</code> returns a version-stamped bundle with no
+          <code>id</code>, <code>tenantId</code>, <code>createdAt</code>, <code>version</code> or
+          <code>previousVersionId</code>, so the target assigns its own identity. Omit the names to
+          export every template. <code>importTemplates()</code> defaults to
+          <code>mode: 'create'</code>, which refuses to touch templates that already exist;
+          <code>'upsert'</code> updates them and bumps their version. Every template is validated
+          before any is written, so an invalid bundle is rejected whole. It also rejects an
+          unsupported <code>bundleVersion</code>, an empty bundle and duplicate names. The
+          <code>ImportResult</code> lists <code>created</code>, <code>updated</code>,
+          <code>skipped</code> and per-template <code>errors</code>; with
+          <code>dryRun: true</code> nothing is written.
+        </p>
+        <pre class="guide-code"><code set:html={bundleCode}></code></pre>
 
         <h2>Where to go next</h2>
         <ul class="guide-next">
