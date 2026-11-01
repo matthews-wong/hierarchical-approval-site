@@ -94,6 +94,7 @@ new ApprovalEngine({
       ['OutboxNotificationAdapter', 'transactional outbox + exponential backoff + dead-letter'],
       ['TemplatedNotificationAdapter', 'render a human message per event type'],
       ['CompositeNotificationAdapter', 'multi-channel fan-out, fault-isolated'],
+      ['DigestNotificationAdapter', 'one batched message per recipient; rejections and completions still go out at once'],
     ],
     snippet: `import { OutboxNotificationAdapter } from
   'hierarchical-approval/plugins/notify';
