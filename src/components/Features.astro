@@ -78,6 +78,12 @@ const features = [
     desc: 'escalationAfterHours on a level and slaDeadlineHours on a template take hours instead of days, and cannot be combined with the day-based options. Pass calendar: businessHoursCalendar({ workdayStartHour, workdayEndHour, weekendDays, holidays }) to the engine and the clock only runs inside the working window. With weekendCalendar(), which counts whole days only, hour deadlines fall back to elapsed clock time.',
     color: '#0e7490', colorBg: '#ecfeff',
   },
+  {
+    icon: `<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M6 8.5V12a3 3 0 0 0 3 3h6.5M18 8.5v7"/>`,
+    title: 'Sub-workflows',
+    desc: 'A level with subWorkflow: { templateName } needs no approvers: opening it submits a child approval against that template, copying the document data unless carryData is false. An approved child advances the parent; a rejected, cancelled or expired child rejects it. Nesting stops at five levels, and a finished parent cancels its children.',
+    color: '#6d28d9', colorBg: '#f5f3ff',
+  },
 ];
 ---
 
