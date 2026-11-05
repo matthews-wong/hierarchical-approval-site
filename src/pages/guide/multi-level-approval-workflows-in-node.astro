@@ -74,6 +74,14 @@ await engine.delegate(po.id, {
 // Or reject and stop the chain (only an approver of the open level can):
 await engine.reject(po.id, { approverId: 'finance_charlie', reason: 'Not in this quarter budget' });`);
 
+const outOfOfficeCode = hl(`const engine = new ApprovalEngine({
+  adapter,
+  outOfOfficeProvider: {
+    // Return the stand-in's user id, or null when the approver is available.
+    getDelegateFor: async (userId, at) => hr.coverFor(userId, at),
+  },
+});`);
+
 const escalationCode = hl(`await engine.defineTemplate({
   name: 'Purchase Order',
   documentType: 'purchase_order',
@@ -245,6 +253,24 @@ const articleSchema = {
           one branch of a parallel group, "previous" steps back past the whole group, not into a
           sibling branch. It throws a validation error if the failing level is the first in the
           chain.
+        </p>
+
+        <h2>Cover for approvers on leave</h2>
+        <p>
+          <code>delegate()</code> needs the absent person to act first. An
+          <code>outOfOfficeProvider</code> removes that step: the engine asks it for a stand-in
+          whenever it resolves approvers, which is at submit, when a level activates, on escalation
+          and in <code>previewApprovalChain()</code>, so a preview matches what
+          <code>submit()</code> goes on to do. Absence stays in your HR or directory system; the
+          engine only calls <code>getDelegateFor(userId, at)</code>, and <code>at</code> lets you
+          return date-bound cover.
+        </p>
+        <pre class="guide-code"><code set:html={outOfOfficeCode}></code></pre>
+        <p>
+          Cover is followed through up to five hops, so A covered by B covered by C lands on
+          whoever is present. A cycle (A covers B while B covers A) stops and leaves the original
+          approver assigned. A provider that throws is treated as "no cover known", so a failed
+          HR lookup never stops an approval from being routed.
         </p>
 
         <h2>Preview a chain before you submit it</h2>
