@@ -96,6 +96,23 @@ const escalationCode = hl(`await engine.defineTemplate({
   ],
 });`);
 
+const attachmentCode = hl(`// Store a reference to the quote, not the file itself.
+const withQuote = await engine.addAttachment(po.id, {
+  actorId: 'buyer-1',
+  name: 'quote.pdf',
+  uri: 's3://procurement/quotes/q-1.pdf',
+  contentType: 'application/pdf',
+  sizeBytes: 48_120,
+});
+
+// Detach it later; the audit entry keeps the name and URI.
+const [quote] = withQuote.attachments ?? [];
+await engine.removeAttachment(po.id, {
+  actorId: 'buyer-1',
+  attachmentId: quote.id,
+  reason: 'Superseded by quote v2',
+});`);
+
 const previewCode = hl(`// Why does a $25,000 order have a CFO level?
 const why = await engine.explainChain('Purchase Order', { amount: 25_000 }, 'employee_jane');
 // why.levels[2] → { level: 3, name: 'CFO', source: 'condition', addedByRule: 0, ... }
@@ -272,6 +289,19 @@ const articleSchema = {
           approver assigned. A provider that throws is treated as "no cover known", so a failed
           HR lookup never stops an approval from being routed.
         </p>
+
+        <h2>Attach the evidence an approval rests on</h2>
+        <p>
+          <code>addAttachment()</code> records a reference to a quote, a signed contract or a
+          screenshot against the instance. The engine stores the name and <code>uri</code> (an S3
+          URI, a DMS id or an https URL), never the bytes, so retention, virus scanning and access
+          control stay with the store that already handles them. It works on any non-terminal
+          instance, for anyone your authorization policy allows. <code>removeAttachment()</code>
+          detaches the reference and deletes nothing from the store; the
+          <code>attachment_removed</code> audit entry keeps the name and URI, so the trail still
+          shows what an approver could see.
+        </p>
+        <pre class="guide-code"><code set:html={attachmentCode}></code></pre>
 
         <h2>Preview a chain before you submit it</h2>
         <p>
