@@ -113,6 +113,18 @@ await engine.removeAttachment(po.id, {
   reason: 'Superseded by quote v2',
 });`);
 
+const infoCode = hl(`// A manager needs one fact before deciding. The instance stays pending.
+await engine.requestInfo(po.id, {
+  approverId: 'manager_alice',
+  question: 'Which cost centre should this be booked to?',
+});
+
+// The submitter answers; every paused deadline moves out by the time it was open.
+await engine.provideInfo(po.id, {
+  respondedBy: 'buyer-1',
+  response: 'CC-42',
+});`);
+
 const previewCode = hl(`// Why does a $25,000 order have a CFO level?
 const why = await engine.explainChain('Purchase Order', { amount: 25_000 }, 'employee_jane');
 // why.levels[2] → { level: 3, name: 'CFO', source: 'condition', addedByRule: 0, ... }
@@ -302,6 +314,20 @@ const articleSchema = {
           shows what an approver could see.
         </p>
         <pre class="guide-code"><code set:html={attachmentCode}></code></pre>
+
+        <h2>Ask the submitter a question without rejecting</h2>
+        <p>
+          Rejecting throws away the approvals already collected and forces a resubmit.
+          <code>requestInfo()</code> lets an approver ask the submitter one question instead: the
+          instance stays <code>pending</code> and keeps its approvers. Only one question can be
+          open at a time, and asking on a non-pending instance throws. While it is open the
+          scheduler skips the instance, so escalation, reminders, SLA breach and expiry cannot
+          fire. <code>provideInfo()</code> answers it and pushes every deadline that was set out by
+          exactly how long the question was open. Both calls write
+          <code>info_requested</code> and <code>info_provided</code> audit entries and emit the
+          matching events.
+        </p>
+        <pre class="guide-code"><code set:html={infoCode}></code></pre>
 
         <h2>Preview a chain before you submit it</h2>
         <p>
