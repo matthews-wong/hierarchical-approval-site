@@ -22,6 +22,7 @@
 - Template promotion: `engine.exportTemplates(names?)` returns a bundle without ids, tenant or version lineage; `engine.importTemplates(bundle, { mode: 'create' | 'upsert', dryRun })` validates every template before writing any and returns `ImportResult`
 - Out-of-office cover: an `outOfOfficeProvider` with `getDelegateFor(userId, at)` swaps an absent approver for a stand-in at submit, level activation, escalation and in `previewApprovalChain()`. Cover chains up to five hops, a cycle leaves the original approver assigned, and a provider that throws counts as no cover
 - Attachment references: `engine.addAttachment()` and `engine.removeAttachment()` store a reference (name, `uri`, optional `contentType` and `sizeBytes`), never the file. Removing detaches the reference and deletes nothing from your store; the `attachment_removed` audit entry keeps its name and URI
+- Request for information: `engine.requestInfo()` lets an approver ask the submitter a question without rejecting. The instance stays `pending` and only one question can be open. Escalation, reminders, SLA breach and expiry are paused while it is open, and `provideInfo()` answers it and pushes the paused deadlines out by the time it was open
 - Override: bypass remaining levels (when `allowOverride: true` in the template)
 - Multi-tenancy: every adapter call is scoped by `tenantId`
 - ApprovalTestKit + ManualClock for deterministic, zero-I/O test suites
