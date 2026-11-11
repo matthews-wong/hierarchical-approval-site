@@ -96,6 +96,26 @@ const escalationCode = hl(`await engine.defineTemplate({
   ],
 });`);
 
+const reminderCode = hl(`await engine.defineTemplate({
+  name: 'Purchase Order',
+  documentType: 'purchase_order',
+  levels: [
+    {
+      level: 1,
+      name: 'Line Manager',
+      approvers: [{ type: 'user', userId: 'manager_alice' }],
+      mode: 'any',
+      reminderAfterDays: 2, // first nudge two days after the level opens
+      reminderEveryDays: 1, // then daily
+      maxReminders: 3,      // the default
+    },
+  ],
+});
+
+engine.on('approval:reminder', (event) => {
+  console.log(event.level, event.recipients, event.reminderNumber);
+});`);
+
 const attachmentCode = hl(`// Store a reference to the quote, not the file itself.
 const withQuote = await engine.addAttachment(po.id, {
   actorId: 'buyer-1',
@@ -353,6 +373,21 @@ const articleSchema = {
           fires the next rung once a level is due.
         </p>
         <pre class="guide-code"><code set:html={escalationCode}></code></pre>
+
+        <h2>Nudge a slow approver without escalating</h2>
+        <p>
+          A late approval is not always a stuck one. <code>reminderAfterDays</code> on a level
+          notifies its pending approvers that many days after the level opens,
+          <code>reminderEveryDays</code> repeats it, and <code>maxReminders</code> caps the count
+          (default 3). Each reminder emits <code>approval:reminder</code> with
+          <code>level</code>, <code>recipients</code> and <code>reminderNumber</code>, and records
+          a <code>reminded</code> audit entry. Recipients exclude anyone who has already voted.
+          Reminders never change who can approve or when the level escalates, and they stop when
+          the level closes. <code>reminderEveryDays</code> without
+          <code>reminderAfterDays</code> is rejected when the template is defined. Like
+          escalation, reminders need the escalation scheduler running.
+        </p>
+        <pre class="guide-code"><code set:html={reminderCode}></code></pre>
 
         <h2>The audit trail (and why locking matters)</h2>
         <p>
