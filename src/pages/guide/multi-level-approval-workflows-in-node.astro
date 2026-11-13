@@ -210,6 +210,22 @@ console.log(preview.created, preview.updated, preview.errors);
 
 await production.importTemplates(bundle, { mode: 'upsert' });`);
 
+const inheritCode = hl(`// PO-base holds the shared spine; the EU variant swaps one level.
+await engine.defineTemplate({
+  name: 'PO-EU',
+  extends: 'PO-base',
+  documentType: 'purchase_order',
+  removeLevels: [2], // drop an inherited level
+  levels: [
+    {
+      level: 3, // same number as a base level: overrides it field by field
+      name: 'EU Finance',
+      mode: 'any',
+      approvers: [{ type: 'user', userId: 'eu-fin' }],
+    },
+  ],
+});`);
+
 const pgCode = hl(`import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
 
 const adapter = new PostgresAdapter({ connectionString: process.env.DATABASE_URL });
@@ -436,6 +452,20 @@ const articleSchema = {
           <code>dryRun: true</code> nothing is written.
         </p>
         <pre class="guide-code"><code set:html={bundleCode}></code></pre>
+
+        <h2>Derive a template instead of copying it</h2>
+        <p>
+          <code>extends</code> names a base template. Levels are keyed by number: a level in the
+          derived config overrides the base level field by field, a new number is appended, and
+          <code>removeLevels</code> drops inherited ones. <code>conditions</code> are replaced
+          wholesale when you supply them; <code>escalation</code>,
+          <code>slaDeadlineDays</code> and <code>allowOverride</code> are inherited unless the
+          derived config sets them. Resolution happens once, when the template is defined, and the
+          flattened result is what gets stored. Editing the base later does not reshape a derived
+          template or an instance already running against it. <code>extends</code> and
+          <code>removeLevels</code> are not persisted.
+        </p>
+        <pre class="guide-code"><code set:html={inheritCode}></code></pre>
 
         <h2>Where to go next</h2>
         <ul class="guide-next">
