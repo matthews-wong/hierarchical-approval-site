@@ -1,4 +1,6 @@
 ---
+import pluginSource from '../samples/plugins/plugins.ts?raw';
+
 const TOKEN =
   /(\/\/.*)|(`(?:[^`\\]|\\.)*`)|('(?:[^'\\]|\\.)*')|\b(async|await|const|class|new|import|from)\b/g;
 
@@ -17,6 +19,10 @@ function hl(raw: string): string {
     });
 }
 
+// Each `// @plugin` marker starts the code shown for one card, in card order;
+// the file as a whole is type-checked by `npm run check`.
+const snippets = pluginSource.split('// @plugin\n').slice(1).map((sample) => sample.trim());
+
 const families = [
   {
     name: 'Tamper-evident audit',
@@ -28,15 +34,7 @@ const families = [
       ['RedactingAuditAdapter', 'strips PII before external sinks — originals never mutated'],
       ['CompositeAuditAdapter', 'fan out to Kafka, S3, CloudTrail with per-sink fault isolation'],
     ],
-    snippet: `import { HashChainAuditAdapter } from
-  'hierarchical-approval/plugins/audit';
-
-const audit = new HashChainAuditAdapter();
-const engine = new ApprovalEngine({ adapter, auditAdapter: audit });
-
-// Prove the log was never altered:
-await audit.verify(tenantId, instanceId);
-// → { ok: true } | { ok: false, brokenAt: 3 }`,
+    snippet: snippets[0],
     color: '#b45309', colorBg: '#fef9ee',
   },
   {
@@ -49,14 +47,7 @@ await audit.verify(tenantId, instanceId);
       ['InMemoryMetricsAdapter', 'snapshot() with count/sum/min/max/avg/p50/p95'],
       ['CompositeMetricsAdapter', 'feed several backends from one engine'],
     ],
-    snippet: `import { PrometheusMetricsAdapter } from
-  'hierarchical-approval/plugins/metrics';
-
-const metrics = new PrometheusMetricsAdapter();
-new ApprovalEngine({ adapter, metricsAdapter: metrics });
-
-// Expose on /metrics:
-res.type('text/plain').send(metrics.scrape());`,
+    snippet: snippets[1],
     color: '#1a7a45', colorBg: '#f0f9f4',
   },
   {
@@ -69,20 +60,7 @@ res.type('text/plain').send(metrics.scrape());`,
       ['RateLimitMiddleware', 'token-bucket throttling per actor + operation'],
       ['LoggingMiddleware', 'structured before / after / onError with timings'],
     ],
-    snippet: `import { RbacAuthorizationPolicy, RateLimitMiddleware }
-  from 'hierarchical-approval/plugins/resilience';
-
-new ApprovalEngine({
-  adapter,
-  authorizationPolicy: new RbacAuthorizationPolicy({
-    defaultMode: 'deny',
-    rules: { override: { roles: ['admin'] } },
-    roleProvider,
-  }),
-  middleware: [new RateLimitMiddleware({
-    capacity: 20, refillTokensPerSecond: 5,
-  })],
-});`,
+    snippet: snippets[2],
     color: '#dc2626', colorBg: '#fef2f2',
   },
   {
@@ -96,17 +74,7 @@ new ApprovalEngine({
       ['CompositeNotificationAdapter', 'multi-channel fan-out, fault-isolated'],
       ['DigestNotificationAdapter', 'one batched message per recipient; rejections and completions still go out at once'],
     ],
-    snippet: `import { OutboxNotificationAdapter } from
-  'hierarchical-approval/plugins/notify';
-
-const outbox = new OutboxNotificationAdapter({
-  transport: (event) => emailGateway.send(event),
-  maxAttempts: 5,
-});
-new ApprovalEngine({ adapter, notificationAdapter: outbox });
-
-await outbox.drain();        // deliver due items
-await outbox.deadLettered(); // inspect failures`,
+    snippet: snippets[3],
     color: '#1d6fe4', colorBg: '#eff6ff',
   },
   {
@@ -119,17 +87,7 @@ await outbox.deadLettered(); // inspect failures`,
       ['Tracer port', 'structurally satisfied by a real @opentelemetry/api Tracer'],
       ['noopTracer', 'the default — tracing costs nothing until you wire it'],
     ],
-    snippet: `import { TracingMiddleware } from
-  'hierarchical-approval/plugins/tracing';
-
-// A real OTel tracer satisfies the port structurally —
-// no adapter, no extra dependency.
-new ApprovalEngine({
-  adapter,
-  middleware: [new TracingMiddleware({
-    tracer: otel.trace.getTracer('approvals'),
-  })],
-});`,
+    snippet: snippets[4],
     color: '#7c3aed', colorBg: '#f5f3ff',
   },
   {
@@ -142,19 +100,7 @@ new ApprovalEngine({
       ['Retry-After aware', 'retries 5xx / 408 / 429; other 4xx fail fast'],
       ['HttpClient port', 'satisfied by the global fetch — zero new dependencies'],
     ],
-    snippet: `import { WebhookNotificationAdapter } from
-  'hierarchical-approval/plugins/webhook';
-
-new ApprovalEngine({
-  adapter,
-  notificationAdapter: new WebhookNotificationAdapter({
-    url: 'https://erp.example.com/hooks/approvals',
-    secret: process.env.WEBHOOK_SECRET,
-  }),
-});
-
-// Receiver verifies: HMAC over \`<timestamp>.<body>\`
-// sent as  X-Approval-Signature: t=...,v1=...`,
+    snippet: snippets[5],
     color: '#0891b2', colorBg: '#ecfeff',
   },
   {
@@ -167,15 +113,7 @@ new ApprovalEngine({
       ['ISchedulerAdapter port', 'back it with BullMQ, Temporal, cron — anything one-shot'],
       ['Replaces polling', 'supply one and the built-in setInterval never starts'],
     ],
-    snippet: `import { InMemorySchedulerAdapter } from
-  'hierarchical-approval/plugins/scheduler';
-
-// Or implement ISchedulerAdapter over BullMQ / Temporal
-// to survive restarts across a fleet.
-new ApprovalEngine({
-  adapter,
-  schedulerAdapter: new InMemorySchedulerAdapter(),
-});`,
+    snippet: snippets[6],
     color: '#ca8a04', colorBg: '#fefce8',
   },
 ];
