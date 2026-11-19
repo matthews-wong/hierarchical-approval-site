@@ -2,6 +2,11 @@
 import Layout from '../../layouts/Layout.astro';
 import Nav from '../../components/Nav.astro';
 import Footer from '../../components/Footer.astro';
+import flowSource from '../../samples/guide/flow.ts?raw';
+import outOfOfficeSource from '../../samples/guide/outofoffice.ts?raw';
+import bundleSource from '../../samples/guide/bundle.ts?raw';
+import inheritSource from '../../samples/guide/inherit.ts?raw';
+import postgresSource from '../../samples/guide/postgres.ts?raw';
 
 const title = 'Multi-Level Approval Workflows in Node.js — Without BPMN';
 const description =
@@ -34,142 +39,27 @@ const installCode = hl(`npm install hierarchical-approval
 # PostgreSQL is an optional peer dependency, only for production
 npm install pg @types/pg`);
 
-const templateCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
-import { MemoryAdapter } from 'hierarchical-approval/adapters/memory';
+// Each `// @step` marker starts the code shown for one section, in order; the
+// samples are type-checked by `npm run check`.
+function steps(source: string): string[] {
+  return source.split('// @step\n').slice(1).map((sample) => hl(sample.trim()));
+}
 
-const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
-
-await engine.defineTemplate({
-  name: 'Purchase Order',
-  documentType: 'purchase_order',
-  levels: [
-    { level: 1, name: 'Line Manager', approvers: [{ type: 'user', userId: 'manager_alice' }], mode: 'any' },
-    { level: 2, name: 'Finance',      approvers: [{ type: 'user', userId: 'finance_bob' }],   mode: 'any' },
-  ],
-  // Orders over $10,000 automatically gain a CFO level:
-  conditions: [{
-    when: { field: 'amount', operator: '>', value: 10_000 },
-    addLevels: [{ level: 3, name: 'CFO', approvers: [{ type: 'user', userId: 'cfo_carol' }], mode: 'any' }],
-  }],
-});`);
-
-const submitCode = hl(`const po = await engine.submit({
-  templateName: 'Purchase Order',
-  documentId: 'PO-001',
-  documentType: 'purchase_order',
-  submittedBy: 'employee_jane',
-  data: { amount: 4_000, vendor: 'Acme Corp' },
-});
-
-await engine.approve(po.id, { approverId: 'manager_alice', comment: 'Budget available' });
-await engine.approve(po.id, { approverId: 'finance_bob' }); // → status: 'approved'`);
-
-const delegateCode = hl(`// Finance is on leave — hand the pending step to a colleague:
-await engine.delegate(po.id, {
-  fromApprover: 'finance_bob',
-  toApprover: 'finance_charlie',
-  reason: 'On leave until Monday',
-});
-
-// Or reject and stop the chain (only an approver of the open level can):
-await engine.reject(po.id, { approverId: 'finance_charlie', reason: 'Not in this quarter budget' });`);
-
-const outOfOfficeCode = hl(`const engine = new ApprovalEngine({
-  adapter,
-  outOfOfficeProvider: {
-    // Return the stand-in's user id, or null when the approver is available.
-    getDelegateFor: async (userId, at) => hr.coverFor(userId, at),
-  },
-});`);
-
-const escalationCode = hl(`await engine.defineTemplate({
-  name: 'Purchase Order',
-  documentType: 'purchase_order',
-  levels: [
-    // The level decides when the first rung fires; the ladder decides who is added.
-    { level: 1, name: 'Line Manager', approvers: [{ type: 'user', userId: 'manager_alice' }], mode: 'any', escalationAfterDays: 2 },
-  ],
-  escalationSteps: [
-    { afterDays: 2, escalateTo: { type: 'user', userId: 'director_dana' } },
-    { afterDays: 4, escalateTo: { type: 'user', userId: 'vp_victor' } },
-    { afterDays: 7, escalateTo: { type: 'role', role: 'exec' } },
-  ],
-});`);
-
-const reminderCode = hl(`await engine.defineTemplate({
-  name: 'Purchase Order',
-  documentType: 'purchase_order',
-  levels: [
-    {
-      level: 1,
-      name: 'Line Manager',
-      approvers: [{ type: 'user', userId: 'manager_alice' }],
-      mode: 'any',
-      reminderAfterDays: 2, // first nudge two days after the level opens
-      reminderEveryDays: 1, // then daily
-      maxReminders: 3,      // the default
-    },
-  ],
-});
-
-engine.on('approval:reminder', (event) => {
-  console.log(event.level, event.recipients, event.reminderNumber);
-});`);
-
-const attachmentCode = hl(`// Store a reference to the quote, not the file itself.
-const withQuote = await engine.addAttachment(po.id, {
-  actorId: 'buyer-1',
-  name: 'quote.pdf',
-  uri: 's3://procurement/quotes/q-1.pdf',
-  contentType: 'application/pdf',
-  sizeBytes: 48_120,
-});
-
-// Detach it later; the audit entry keeps the name and URI.
-const [quote] = withQuote.attachments ?? [];
-await engine.removeAttachment(po.id, {
-  actorId: 'buyer-1',
-  attachmentId: quote.id,
-  reason: 'Superseded by quote v2',
-});`);
-
-const infoCode = hl(`// A manager needs one fact before deciding. The instance stays pending.
-await engine.requestInfo(po.id, {
-  approverId: 'manager_alice',
-  question: 'Which cost centre should this be booked to?',
-});
-
-// The submitter answers; every paused deadline moves out by the time it was open.
-await engine.provideInfo(po.id, {
-  respondedBy: 'buyer-1',
-  response: 'CC-42',
-});`);
-
-const previewCode = hl(`// Why does a $25,000 order have a CFO level?
-const why = await engine.explainChain('Purchase Order', { amount: 25_000 }, 'employee_jane');
-// why.levels[2] → { level: 3, name: 'CFO', source: 'condition', addedByRule: 0, ... }
-// why.rules     → [{ index: 0, matched: true, addsLevels: [3], skipsLevels: [] }]
-
-// What happens if the CFO says no? Nothing is stored and nobody is notified.
-const dryRun = await engine.simulate({
-  templateName: 'Purchase Order',
-  data: { amount: 25_000 },
-  submittedBy: 'employee_jane',
-  decisions: [
-    { approve: 'manager_alice' },
-    { approve: 'finance_bob' },
-    { reject: 'cfo_carol', reason: 'Over budget' },
-  ],
-});
-// dryRun.finalStatus → 'rejected'; dryRun.transcript has one step per decision`);
-
-const auditCode = hl(`const history = await engine.getHistory(po.id);
-// [
-//   { action: 'submitted', actorId: 'employee_jane', level: 1, timestamp: ... },
-//   { action: 'approved',  actorId: 'manager_alice', level: 1, timestamp: ... },
-//   { action: 'delegated', actorId: 'finance_bob', ... },
-//   ...
-// ]`);
+const [
+  templateCode,
+  submitCode,
+  delegateCode,
+  escalationCode,
+  reminderCode,
+  attachmentCode,
+  infoCode,
+  previewCode,
+  auditCode,
+] = steps(flowSource);
+const [outOfOfficeCode] = steps(outOfOfficeSource);
+const [bundleCode] = steps(bundleSource);
+const [inheritCode] = steps(inheritSource);
+const [pgCode] = steps(postgresSource);
 
 const nestCode = hl(`import { Module } from '@nestjs/common';
 import { HierarchicalApprovalModule } from 'hierarchical-approval/nestjs';
@@ -200,38 +90,6 @@ export class InvoiceService {
     });
   }
 }`);
-
-const bundleCode = hl(`// Author in a sandbox, promote to production.
-const bundle = await sandbox.exportTemplates(['Purchase Order']);
-
-// Report what would change before writing anything.
-const preview = await production.importTemplates(bundle, { mode: 'upsert', dryRun: true });
-console.log(preview.created, preview.updated, preview.errors);
-
-await production.importTemplates(bundle, { mode: 'upsert' });`);
-
-const inheritCode = hl(`// PO-base holds the shared spine; the EU variant swaps one level.
-await engine.defineTemplate({
-  name: 'PO-EU',
-  extends: 'PO-base',
-  documentType: 'purchase_order',
-  removeLevels: [2], // drop an inherited level
-  levels: [
-    {
-      level: 3, // same number as a base level: overrides it field by field
-      name: 'EU Finance',
-      mode: 'any',
-      approvers: [{ type: 'user', userId: 'eu-fin' }],
-    },
-  ],
-});`);
-
-const pgCode = hl(`import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
-
-const adapter = new PostgresAdapter({ connectionString: process.env.DATABASE_URL });
-await adapter.migrate(); // create tables once, at startup
-
-const engine = new ApprovalEngine({ adapter });`);
 
 const articleSchema = {
   '@context': 'https://schema.org',
