@@ -1,126 +1,17 @@
 ---
 import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
 import { hl } from '../../lib/highlight';
+import flowSource from '../../samples/expense-reports/flow.ts?raw';
+import receiptsSource from '../../samples/expense-reports/receipts.ts?raw';
 
-const configCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
-import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
-
-const engine = new ApprovalEngine({
-  adapter: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
-  tenantId: 'acme-corp',
-  // Resolves every { type: 'role' } approver below
-  orgProvider: { getUsersByRole: (role) => directory.usersWithRole(role) },
-});
-
-// Conditions read plain data fields, so convert to USD before submitting
-// and store the result as data.amountUsd (see edge case 03).
-await engine.defineTemplate({
-  name: 'expense-report',
-  documentType: 'expense',
-  levels: [
-    {
-      level: 1,
-      name: 'Direct manager',
-      approvers: [{ type: 'role', role: 'direct-manager' }],
-      mode: 'any',
-    },
-  ],
-  conditions: [
-    {
-      when: { field: 'amountUsd', operator: '>', value: 500 },
-      addLevels: [
-        {
-          level: 2,
-          name: 'Finance',
-          approvers: [{ type: 'role', role: 'finance-controller' }],
-          mode: 'any',
-        },
-      ],
-    },
-    {
-      when: { field: 'amountUsd', operator: '>', value: 2_000 },
-      addLevels: [
-        {
-          level: 3,
-          name: 'CFO',
-          approvers: [{ type: 'role', role: 'cfo' }],
-          mode: 'any',
-        },
-      ],
-    },
-    {
-      when: { field: 'isInternational', operator: '==', value: true },
-      addLevels: [
-        {
-          level: 4,
-          name: 'Compliance',
-          approvers: [{ type: 'role', role: 'compliance-officer' }],
-          mode: 'any',
-        },
-      ],
-    },
-  ],
-});`);
-
-const dupeCode = hl(`// Detect duplicate expense reports before submitting
-const DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-
-async function isDuplicate(
-  employeeId: string,
-  category: string,
-  totalAmount: number,
-  currency: string
-): Promise<boolean> {
-  const recent = await engine.queryInstances({
-    documentType: 'expense',
-    submittedBy: employeeId,
-    fromDate: new Date(Date.now() - DUPLICATE_WINDOW_MS),
-    // Matches instances whose data contains all of these pairs
-    data: { category, totalAmount, currency },
-  });
-  return recent.items.some((instance) => instance.status !== 'rejected');
+// Each `// @step` marker starts the code shown for one section, in order; the
+// samples are type-checked by `npm run check`.
+function steps(source: string): string[] {
+  return source.split('// @step\n').slice(1).map((sample) => hl(sample.trim()));
 }
 
-if (await isDuplicate(employeeId, category, amount, currency)) {
-  throw new Error('Duplicate expense report detected within the last 7 days');
-}`);
-
-const receiptCode = hl(`// Hold approval until receipts are attached (IAuthorizationPolicy)
-import { ApprovalEngine } from 'hierarchical-approval';
-import type { IAuthorizationPolicy, AuthorizationContext } from 'hierarchical-approval';
-
-const MEAL_RECEIPT_THRESHOLD_USD = 25;
-
-class ReceiptPolicy implements IAuthorizationPolicy {
-  authorize(ctx: AuthorizationContext): string | undefined {
-    if (ctx.operation !== 'approve') return undefined;
-
-    const { receipts, category, amountUsd } = ctx.instance.data as {
-      receipts: string[];
-      category: string;
-      amountUsd: number;
-    };
-    const requiresReceipt =
-      category !== 'meals' || amountUsd > MEAL_RECEIPT_THRESHOLD_USD;
-
-    if (requiresReceipt && receipts.length === 0) {
-      return 'Receipt required for this expense category and amount';
-    }
-    return undefined; // allow
-  }
-}
-
-const engine = new ApprovalEngine({
-  adapter: new PostgresAdapter({ connectionString: process.env.DATABASE_URL }),
-  tenantId: 'acme-corp',
-  authorizationPolicy: new ReceiptPolicy(),
-});
-
-// approve() now throws ApprovalForbiddenError until the employee attaches them:
-await engine.updateData(instance.id, {
-  updatedBy: 'emp-4821',
-  data: { receipts: ['receipt-001.pdf'] },
-});`);
+const [configCode, dupeCode] = steps(flowSource);
+const [receiptCode] = steps(receiptsSource);
 ---
 
 <UseCaseLayout
