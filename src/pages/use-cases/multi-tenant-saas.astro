@@ -1,93 +1,16 @@
 ---
 import UseCaseLayout from '../../layouts/UseCaseLayout.astro';
 import { hl } from '../../lib/highlight';
+import flowSource from '../../samples/multi-tenant-saas/flow.ts?raw';
 
-const configCode = hl(`import { ApprovalEngine } from 'hierarchical-approval';
-import type { ApprovalTemplateConfig } from 'hierarchical-approval';
-import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
-
-// One engine per tenant: tenantId scopes templates and instances.
-// Share the adapter (one pool) across all of them.
-const adapter = new PostgresAdapter({ connectionString: process.env.DATABASE_URL });
-const engines = new Map<string, ApprovalEngine>();
-
-function engineFor(tenantId: string): ApprovalEngine {
-  let engine = engines.get(tenantId);
-  if (!engine) {
-    engine = new ApprovalEngine({
-      adapter,
-      tenantId,
-      // Resolves every { type: 'role' } approver. The engine calls this with
-      // the role only, so close over the tenant here.
-      orgProvider: { getUsersByRole: (role) => directory.usersWithRole(role, tenantId) },
-    });
-    engines.set(tenantId, engine);
-  }
-  return engine;
+// Each `// @step` marker starts the code shown for one section, in order; the
+// samples are type-checked by `npm run check`.
+function steps(source: string): string[] {
+  return source.split('// @step\n').slice(1).map((sample) => hl(sample.trim()));
 }
 
-// The row your admin UI saves for each tenant
-interface TenantApprovalConfig {
-  levels: Array<{ approverRoles: string[]; requireAll: boolean }>;
-}
+const [configCode, suspendCode, validateConfigCode] = steps(flowSource);
 
-const FALLBACK_CONFIG: TenantApprovalConfig = {
-  levels: [{ approverRoles: ['admin'], requireAll: false }],
-};
-
-function toTemplate(config: TenantApprovalConfig): ApprovalTemplateConfig {
-  return {
-    name: 'tenant-document-approval',
-    documentType: 'document',
-    levels: config.levels.map((level, index) => ({
-      level: index + 1,
-      name: \`Level \${index + 1}\`,
-      approvers: level.approverRoles.map((role) => ({ type: 'role', role })),
-      mode: level.requireAll ? 'all' : 'any',
-    })),
-  };
-}
-
-// Run when the tenant saves their chain (and once for tenants that never did)
-await engineFor(tenantId).defineTemplate(toTemplate(config ?? FALLBACK_CONFIG));`);
-
-const suspendCode = hl(`// Block new submissions from suspended tenants while
-// allowing existing in-flight approvals to complete
-async function submitDocument(tenantId: string, documentId: string, actorId: string, data: Record<string, unknown>) {
-  const tenant = await db.query(
-    'SELECT status FROM tenants WHERE id = $1',
-    [tenantId]
-  );
-  if (tenant.rows[0]?.status === 'suspended') {
-    throw new Error(\`Tenant \${tenantId} is suspended. Contact support to reactivate.\`);
-  }
-
-  return engineFor(tenantId).submit({
-    templateName: 'tenant-document-approval',
-    documentType: 'document',
-    documentId,
-    submittedBy: actorId,
-    data,
-  });
-}
-
-// approve() and reject() go straight to the engine, so instances that were
-// already in flight finish normally.`);
-
-const validateConfigCode = hl(`// Validate tenant chain config before saving it
-function validateChainConfig(tenantId: string, config: TenantApprovalConfig): string | null {
-  const result = engineFor(tenantId).validateTemplate(toTemplate(config));
-  if (result.valid) return null;
-  return result.errors.map((e) => \`\${e.field}: \${e.message}\`).join('; ');
-}
-
-// In your admin API endpoint:
-const error = validateChainConfig(tenantId, newConfig);
-if (error) {
-  return res.status(400).json({ error });
-}
-await db.query(/* upsert config */);
-await engineFor(tenantId).updateTemplate(toTemplate(newConfig));`);
 ---
 
 <UseCaseLayout
